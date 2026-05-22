@@ -1,8 +1,22 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { isSupabaseConfigured } from "../lib/supabase";
-import { addCommentReal, createPostReal, getSessionUserId, loadConnectData, reactToPostReal, signInOrSignUp, signOutReal, uploadMediaReal } from "../lib/supabaseData";
-import { CanvasView, Comment, FeedStyle, Post, PostReaction, PostType, SignupProfile, SortMode, User } from "../types";
+import {
+  addCommentReal,
+  createPostReal,
+  getSessionUserId,
+  loadConnectData,
+  reactToPostReal,
+  sendMagicLink,
+  sendPhoneOtp,
+  signInWithPassword,
+  signInWithProvider,
+  signOutReal,
+  signUpWithPassword,
+  updateProfileReal,
+  uploadMediaReal
+} from "../lib/supabaseData";
+import { CanvasView, Comment, FeedStyle, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, SortMode, User } from "../types";
 import { placeNextPost } from "../utils/placement";
 
 type DraftInput = {
@@ -35,7 +49,12 @@ type AppState = {
   theme: "light" | "dark";
   initialize: () => Promise<void>;
   refreshData: () => Promise<void>;
-  signIn: (email: string, password?: string, profile?: SignupProfile) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, profile: SignupProfile) => Promise<void>;
+  requestMagicLink: (email: string) => Promise<void>;
+  requestPhoneOtp: (phone: string) => Promise<void>;
+  signInWithSocialProvider: (provider: "google" | "apple") => Promise<void>;
+  updateProfile: (profile: ProfileUpdate) => Promise<void>;
   signOut: () => Promise<void>;
   createPost: (draft: DraftInput) => Promise<Post>;
   setActivePost: (id?: string) => void;
@@ -125,19 +144,76 @@ export const useAppStore = create<AppState>()(
         const data = await loadConnectData();
         set(data);
       },
-      signIn: async (email, password = "", profile) => {
+      signIn: async (email, password) => {
         if (!isSupabaseConfigured) {
           set({ error: "Supabase is required for sign in. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel." });
           return;
         }
         try {
           set({ loading: true, error: undefined });
-          const userId = await signInOrSignUp(email, password, profile);
+          const userId = await signInWithPassword(email, password);
           const data = await loadConnectData();
-          set({ ...data, currentUserId: userId, activeProfileId: userId, authed: true, loading: false });
+          set({ ...data, currentUserId: userId, authed: true, loading: false });
         } catch (error) {
           set({ error: error instanceof Error ? error.message : "Unable to sign in.", loading: false });
         }
+      },
+      signUp: async (email, password, profile) => {
+        if (!isSupabaseConfigured) {
+          set({ error: "Supabase is required for sign up. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel." });
+          return;
+        }
+        try {
+          set({ loading: true, error: undefined });
+          const userId = await signUpWithPassword(email, password, profile);
+          const data = await loadConnectData();
+          set({ ...data, currentUserId: userId, activeProfileId: userId, authed: true, loading: false });
+        } catch (error) {
+          set({ error: error instanceof Error ? error.message : "Unable to create your account.", loading: false });
+        }
+      },
+      requestMagicLink: async (email) => {
+        try {
+          set({ loading: true, error: undefined });
+          await sendMagicLink(email);
+          set({ loading: false, error: undefined });
+        } catch (error) {
+          set({ error: error instanceof Error ? error.message : "Could not send a magic link.", loading: false });
+          throw error;
+        }
+      },
+      requestPhoneOtp: async (phone) => {
+        try {
+          set({ loading: true, error: undefined });
+          await sendPhoneOtp(phone);
+          set({ loading: false, error: undefined });
+        } catch (error) {
+          set({ error: error instanceof Error ? `${error.message} Phone auth requires Supabase SMS provider configuration.` : "Phone auth requires Supabase SMS provider configuration.", loading: false });
+          throw error;
+        }
+      },
+      signInWithSocialProvider: async (provider) => {
+        try {
+          set({ loading: true, error: undefined });
+          await signInWithProvider(provider);
+          set({ loading: false });
+        } catch (error) {
+          set({
+            error: error instanceof Error ? `${error.message} ${provider} sign-in requires provider credentials in Supabase.` : `${provider} sign-in requires provider credentials in Supabase.`,
+            loading: false
+          });
+          throw error;
+        }
+      },
+      updateProfile: async (profile) => {
+        const userId = get().currentUserId;
+        if (!userId) throw new Error("You must be signed in to edit your profile.");
+        const updated = await updateProfileReal(userId, profile);
+        set({
+          users: get().users.map((user) => (user.id === userId ? updated : user)),
+          activeProfileId: userId,
+          error: undefined
+        });
       },
       signOut: async () => {
         await signOutReal();

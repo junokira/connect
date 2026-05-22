@@ -1,5 +1,5 @@
 import { Image, Send, Upload, Video } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
 import { PostType, User } from "../types";
 
 type Props = {
@@ -47,7 +47,18 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
     return () => URL.revokeObjectURL(url);
   }, [thumbnailFile]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose, open]);
+
   if (!open) return null;
+
+  const stop = (event: MouseEvent) => event.stopPropagation();
 
   const publish = async (event: FormEvent) => {
     event.preventDefault();
@@ -81,8 +92,8 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <form onSubmit={publish} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
+    <div onMouseDown={onClose} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <form onMouseDown={stop} onSubmit={publish} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img className="h-11 w-11 rounded-full object-cover" src={currentUser.avatarUrl} alt="" />

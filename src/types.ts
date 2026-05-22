@@ -27,6 +27,16 @@ export type User = {
   followingCount: number;
 };
 
+export type ProfileUpdate = {
+  displayName: string;
+  username: string;
+  avatarUrl: string;
+  bannerUrl: string;
+  bio: string;
+  location: string;
+  website: string;
+};
+
 export type PostReaction = {
   postId: string;
   userId: string;

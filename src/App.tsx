@@ -1,9 +1,10 @@
-import { Eye, LogIn, Moon, Search, SlidersHorizontal, Sun } from "lucide-react";
+import { Apple, Eye, LogIn, Mail, Moon, Phone, Search, SlidersHorizontal, Sun, UserPlus } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasControls } from "./components/CanvasControls";
 import { CanvasFeed } from "./components/CanvasFeed";
 import { Composer } from "./components/Composer";
 import { MobileNav } from "./components/MobileNav";
+import { PostCard } from "./components/PostCard";
 import { PostModal } from "./components/PostModal";
 import { ProfileView } from "./components/ProfileView";
 import { Sidebar } from "./components/Sidebar";
@@ -35,19 +36,31 @@ const feedStyles: { value: FeedStyle; label: string }[] = [
 
 function AuthGate() {
   const signIn = useAppStore((state) => state.signIn);
+  const signUp = useAppStore((state) => state.signUp);
+  const requestMagicLink = useAppStore((state) => state.requestMagicLink);
+  const requestPhoneOtp = useAppStore((state) => state.requestPhoneOtp);
+  const signInWithSocialProvider = useAppStore((state) => state.signInWithSocialProvider);
   const loading = useAppStore((state) => state.loading);
   const error = useAppStore((state) => state.error);
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [bannerUrl, setBannerUrl] = useState("");
+  const [status, setStatus] = useState("");
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    void signIn(email, password, {
+    setStatus("");
+    if (mode === "signin") {
+      void signIn(email, password);
+      return;
+    }
+    void signUp(email, password, {
       displayName,
       username,
       bio,
@@ -58,42 +71,89 @@ function AuthGate() {
     });
   };
 
+  const sendLink = async () => {
+    setStatus("");
+    try {
+      await requestMagicLink(email);
+      setStatus("Magic link sent. Check your email, then return here after confirmation.");
+    } catch {
+      setStatus("");
+    }
+  };
+
+  const sendPhone = async () => {
+    setStatus("");
+    try {
+      await requestPhoneOtp(phone);
+      setStatus("Phone sign-in requested. Delivery depends on Supabase SMS provider configuration.");
+    } catch {
+      setStatus("");
+    }
+  };
+
   return (
     <main className="h-[100dvh] overflow-y-auto bg-[#f7f7f4] p-4 dark:bg-[#0e1116]">
       <form onSubmit={submit} className="mx-auto my-4 w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-glass dark:border-white/10 dark:bg-slate-950 sm:my-10">
         <p className="mb-1 text-2xl font-black text-slate-950 dark:text-white">CONNECT</p>
-        <p className="mb-6 text-sm text-slate-500">Sign in or create your CONNECT account.</p>
-        <div className="mb-4 grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold">Display name</span>
-            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Your name" />
-          </label>
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold">Username</span>
-            <input value={username} onChange={(event) => setUsername(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="username" />
-          </label>
+        <p className="mb-5 text-sm text-slate-500">Enter the spatial feed with real Supabase auth.</p>
+        <div className="mb-5 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 dark:bg-white/10">
+          <button type="button" onClick={() => setMode("signin")} className={`rounded-xl px-3 py-2 text-sm font-bold ${mode === "signin" ? "bg-white shadow-sm dark:bg-slate-900" : "text-slate-500"}`}>Sign in</button>
+          <button type="button" onClick={() => setMode("signup")} className={`rounded-xl px-3 py-2 text-sm font-bold ${mode === "signup" ? "bg-white shadow-sm dark:bg-slate-900" : "text-slate-500"}`}>Sign up</button>
         </div>
-        <label className="mb-2 block text-sm font-semibold">Bio</label>
-        <textarea value={bio} onChange={(event) => setBio(event.target.value)} className="mb-4 min-h-20 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="A little about you" />
-        <div className="mb-4 grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold">Avatar URL</span>
-            <input value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Optional" />
-          </label>
-          <label className="block">
-            <span className="mb-2 block text-sm font-semibold">Banner URL</span>
-            <input value={bannerUrl} onChange={(event) => setBannerUrl(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Optional" />
-          </label>
-        </div>
+        {mode === "signup" ? (
+          <>
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold">Display name</span>
+                <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Your name" />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold">Username</span>
+                <input value={username} onChange={(event) => setUsername(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="calvin" />
+              </label>
+            </div>
+            <label className="mb-2 block text-sm font-semibold">Bio</label>
+            <textarea value={bio} onChange={(event) => setBio(event.target.value)} className="mb-4 min-h-20 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="A little about you" />
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold">Avatar URL</span>
+                <input value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Optional" />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold">Banner URL</span>
+                <input value={bannerUrl} onChange={(event) => setBannerUrl(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Optional" />
+              </label>
+            </div>
+          </>
+        ) : null}
         <label className="mb-2 block text-sm font-semibold">Email</label>
-        <input value={email} onChange={(event) => setEmail(event.target.value)} className="mb-4 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
+        <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mb-4 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
         <label className="mb-2 block text-sm font-semibold">Password</label>
         <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mb-4 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
         {error ? <p className="mb-4 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
+        {status ? <p className="mb-4 rounded-2xl bg-teal-50 p-3 text-sm text-teal-700 dark:bg-teal-400/10 dark:text-teal-200">{status}</p> : null}
         <button disabled={loading || !email || !password} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">
-          <LogIn size={18} />
-          {loading ? "Connecting..." : "Enter canvas"}
+          {mode === "signup" ? <UserPlus size={18} /> : <LogIn size={18} />}
+          {loading ? "Connecting..." : mode === "signup" ? "Create account" : "Sign in"}
         </button>
+        <div className="my-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-xs font-bold uppercase text-slate-400">
+          <span className="h-px bg-slate-200 dark:bg-white/10" /> Or <span className="h-px bg-slate-200 dark:bg-white/10" />
+        </div>
+        <div className="grid gap-2">
+          <button type="button" disabled={!email || loading} onClick={() => void sendLink()} className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold disabled:opacity-50 dark:border-white/10">
+            <Mail size={17} /> Email magic link
+          </button>
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <input value={phone} onChange={(event) => setPhone(event.target.value)} className="rounded-2xl border border-slate-200 bg-transparent px-4 py-3 text-sm outline-none focus:border-teal-500 dark:border-white/10" placeholder="+15555555555" />
+            <button type="button" disabled={!phone || loading} onClick={() => void sendPhone()} className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold disabled:opacity-50 dark:border-white/10">
+              <Phone size={16} /> Phone
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => void signInWithSocialProvider("google").catch(() => undefined)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-white/10">Google</button>
+            <button type="button" onClick={() => void signInWithSocialProvider("apple").catch(() => undefined)} className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-white/10"><Apple size={16} /> Apple</button>
+          </div>
+        </div>
       </form>
     </main>
   );
@@ -145,6 +205,78 @@ function FilterBar({ mobile = false, onClose }: { mobile?: boolean; onClose?: ()
   );
 }
 
+function ExploreView({
+  posts,
+  users,
+  onOpenPost,
+  onOpenProfile
+}: {
+  posts: ReturnType<typeof getFilteredPosts>;
+  users: ReturnType<typeof useAppStore.getState>["users"];
+  onOpenPost: (id: string) => void;
+  onOpenProfile: (id: string) => void;
+}) {
+  const trending = [...posts].sort((a, b) => b.likesCount + b.commentsCount * 2 + b.repostsCount * 3 - (a.likesCount + a.commentsCount * 2 + a.repostsCount * 3)).slice(0, 8);
+  const media = posts.filter((post) => post.type !== "text").slice(0, 9);
+  const people = users.slice(0, 6);
+
+  return (
+    <main className="thin-scrollbar h-full overflow-y-auto px-4 pb-28 pt-20 lg:px-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-6">
+          <h1 className="text-3xl font-black">Explore</h1>
+          <p className="text-sm text-slate-500">Trending posts, media, and people across CONNECT.</p>
+        </div>
+        <section className="mb-8">
+          <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Trending now</h2>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {trending.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                author={users.find((user) => user.id === post.authorId) || users[0]}
+                emphasized
+                onOpen={() => onOpenPost(post.id)}
+                onProfile={() => onOpenProfile(post.authorId)}
+                onLike={() => undefined}
+                onComment={() => onOpenPost(post.id)}
+                onRepost={() => undefined}
+                onBookmark={() => undefined}
+              />
+            ))}
+          </div>
+        </section>
+        <section className="grid gap-8 lg:grid-cols-[1fr_340px]">
+          <div>
+            <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Media wall</h2>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              {media.map((post) => (
+                <button key={post.id} onClick={() => onOpenPost(post.id)} className="aspect-[4/5] overflow-hidden rounded-2xl bg-slate-100 text-left dark:bg-white/10">
+                  <img className="h-full w-full object-cover" src={post.imageUrl || post.thumbnailUrl} alt="" />
+                </button>
+              ))}
+            </div>
+          </div>
+          <aside>
+            <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">People to visit</h2>
+            <div className="space-y-3">
+              {people.map((user) => (
+                <button key={user.id} onClick={() => onOpenProfile(user.id)} className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-left dark:border-white/10 dark:bg-slate-950">
+                  <img className="h-12 w-12 rounded-full object-cover" src={user.avatarUrl} alt="" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold">{user.displayName}</span>
+                    <span className="block truncate text-xs text-slate-500">@{user.username}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </aside>
+        </section>
+      </div>
+    </main>
+  );
+}
+
 export default function App() {
   const {
     users,
@@ -171,6 +303,7 @@ export default function App() {
     repostPost,
     bookmarkPost,
     addComment,
+    updateProfile,
     signOut,
     toggleTheme
   } = useAppStore();
@@ -180,6 +313,7 @@ export default function App() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
+  const [activeView, setActiveView] = useState<"canvas" | "explore">("canvas");
   const refreshTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -189,6 +323,15 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
+
+  useEffect(() => {
+    if (!filtersOpen) return undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFiltersOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [filtersOpen]);
 
   useEffect(() => {
     if (!supabase || !authed) return undefined;
@@ -234,7 +377,17 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f7f7f4] text-slate-950 dark:bg-[#0e1116] dark:text-white">
-      {!chromeHidden ? <Sidebar currentUser={currentUser} onCreate={() => setComposerOpen(true)} onProfile={() => setActiveProfile(currentUser.id)} onSignOut={() => void signOut()} /> : null}
+      {!chromeHidden ? (
+        <Sidebar
+          currentUser={currentUser}
+          activeView={activeView}
+          onHome={() => setActiveView("canvas")}
+          onExplore={() => setActiveView("explore")}
+          onCreate={() => setComposerOpen(true)}
+          onProfile={() => setActiveProfile(currentUser.id)}
+          onSignOut={() => void signOut()}
+        />
+      ) : null}
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className={`fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 ${chromeHidden ? "" : "lg:left-72"}`}>
           {!chromeHidden ? <FilterBar /> : null}
@@ -255,23 +408,27 @@ export default function App() {
           ) : null}
         </header>
 
-        <CanvasFeed
-          posts={filteredPosts}
-          users={users}
-          sortMode={sortMode}
-          feedStyle={feedStyle}
-          search={search}
-          view={canvasView}
-          onViewChange={setCanvasView}
-          onOpenPost={setActivePost}
-          onOpenProfile={setActiveProfile}
-          onOpenFilters={() => setFiltersOpen(true)}
-          onLikePost={(id) => void likePost(id)}
-          onRepostPost={(id) => void repostPost(id)}
-          onBookmarkPost={(id) => void bookmarkPost(id)}
-        />
+        {activeView === "canvas" ? (
+          <CanvasFeed
+            posts={filteredPosts}
+            users={users}
+            sortMode={sortMode}
+            feedStyle={feedStyle}
+            search={search}
+            view={canvasView}
+            onViewChange={setCanvasView}
+            onOpenPost={setActivePost}
+            onOpenProfile={setActiveProfile}
+            onOpenFilters={() => setFiltersOpen(true)}
+            onLikePost={(id) => void likePost(id)}
+            onRepostPost={(id) => void repostPost(id)}
+            onBookmarkPost={(id) => void bookmarkPost(id)}
+          />
+        ) : (
+          <ExploreView posts={filteredPosts} users={users} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} />
+        )}
 
-        {!chromeHidden ? <CanvasControls
+        {!chromeHidden && activeView === "canvas" ? <CanvasControls
           zoom={canvasView.zoom}
           onZoomIn={() => zoomBy(0.12)}
           onZoomOut={() => zoomBy(-0.12)}
@@ -281,11 +438,20 @@ export default function App() {
         /> : null}
       </div>
 
-      {!chromeHidden ? <MobileNav onCreate={() => setComposerOpen(true)} onFilters={() => setFiltersOpen(true)} onProfile={() => setActiveProfile(currentUser.id)} /> : null}
+      {!chromeHidden ? (
+        <MobileNav
+          activeView={activeView}
+          onHome={() => setActiveView("canvas")}
+          onExplore={() => setActiveView("explore")}
+          onCreate={() => setComposerOpen(true)}
+          onFilters={() => setFiltersOpen(true)}
+          onProfile={() => setActiveProfile(currentUser.id)}
+        />
+      ) : null}
 
       {filtersOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm lg:hidden">
-          <section className="w-full rounded-t-3xl bg-white p-5 shadow-2xl dark:bg-slate-950">
+        <div onMouseDown={() => setFiltersOpen(false)} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm lg:hidden">
+          <section onMouseDown={(event) => event.stopPropagation()} className="w-full rounded-t-3xl bg-white p-5 shadow-2xl dark:bg-slate-950">
             <div className="mb-4 h-1.5 w-12 rounded-full bg-slate-300 mx-auto dark:bg-white/20" />
             <FilterBar mobile onClose={() => setFiltersOpen(false)} />
           </section>
@@ -305,7 +471,16 @@ export default function App() {
         onBookmark={() => activePost && bookmarkPost(activePost.id)}
         onComment={(content) => activePost && addComment(activePost.id, content)}
       />
-      <ProfileView user={activeProfile} users={users} posts={posts} reactions={reactions} onClose={() => setActiveProfile(undefined)} onOpenPost={setActivePost} />
+      <ProfileView
+        user={activeProfile}
+        currentUserId={currentUserId}
+        users={users}
+        posts={posts}
+        reactions={reactions}
+        onClose={() => setActiveProfile(undefined)}
+        onOpenPost={setActivePost}
+        onUpdateProfile={updateProfile}
+      />
     </div>
   );
 }

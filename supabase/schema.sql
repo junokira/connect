@@ -59,6 +59,55 @@ create table if not exists public.follows (
   check (follower_id <> following_id)
 );
 
+create or replace function public.clean_connect_username(raw_username text)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  cleaned text;
+begin
+  cleaned := regexp_replace(coalesce(raw_username, ''), '^@+', '');
+  cleaned := regexp_replace(cleaned, '[^a-zA-Z0-9_]', '_', 'g');
+  cleaned := regexp_replace(cleaned, '_+', '_', 'g');
+  cleaned := regexp_replace(cleaned, '^_+|_+$', '', 'g');
+  cleaned := left(cleaned, 24);
+  if cleaned = '' then
+    cleaned := 'connectuser';
+  end if;
+  return cleaned;
+end;
+$$;
+
+create or replace function public.available_connect_username(raw_username text, current_user_id uuid default null)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  base_username text;
+  candidate text;
+  suffix integer := 0;
+begin
+  base_username := public.clean_connect_username(raw_username);
+
+  loop
+    candidate := case when suffix = 0 then base_username else base_username || suffix::text end;
+    if not exists (
+      select 1 from public.profiles
+      where username = candidate and (current_user_id is null or id <> current_user_id)
+    ) then
+      return candidate;
+    end if;
+    suffix := suffix + 1;
+    if suffix > 99 then
+      raise exception 'Unable to find an available username';
+    end if;
+  end loop;
+end;
+$$;
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -67,17 +116,16 @@ set search_path = public
 as $$
 declare
   base_username text;
+  requested_username text;
 begin
-  base_username := lower(regexp_replace(split_part(new.email, '@', 1), '[^a-zA-Z0-9_]', '', 'g'));
-  if base_username = '' then
-    base_username := 'user';
-  end if;
+  base_username := public.clean_connect_username(split_part(new.email, '@', 1));
+  requested_username := public.available_connect_username(coalesce(nullif(new.raw_user_meta_data->>'username', ''), base_username), new.id);
 
   insert into public.profiles (id, display_name, username, avatar_url, banner_url, bio, location, website)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'display_name', base_username),
-    coalesce(nullif(new.raw_user_meta_data->>'username', ''), base_username) || '_' || left(new.id::text, 5),
+    requested_username,
     coalesce(nullif(new.raw_user_meta_data->>'avatar_url', ''), 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80'),
     coalesce(nullif(new.raw_user_meta_data->>'banner_url', ''), 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80'),
     coalesce(nullif(new.raw_user_meta_data->>'bio', ''), 'New to CONNECT.'),

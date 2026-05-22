@@ -1,4 +1,4 @@
-import { Comment, Post, PostReaction, PostType, SignupProfile, User } from "../types";
+import { Comment, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, User } from "../types";
 import { supabase } from "./supabase";
 
 type ProfileRow = {
@@ -106,6 +106,31 @@ function requireSupabase() {
   return supabase;
 }
 
+export function normalizeUsername(value: string, fallback = "connectuser") {
+  const cleaned = value
+    .trim()
+    .replace(/^@+/, "")
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 24);
+  return cleaned || fallback;
+}
+
+async function resolveAvailableUsername(username: string, currentUserId?: string) {
+  const client = requireSupabase();
+  const base = normalizeUsername(username);
+  for (let index = 0; index < 100; index += 1) {
+    const candidate = index === 0 ? base : `${base}${index}`;
+    let query = client.from("profiles").select("id").eq("username", candidate).limit(1);
+    if (currentUserId) query = query.neq("id", currentUserId);
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data?.length) return candidate;
+  }
+  throw new Error("That username is taken. Try a slightly different one.");
+}
+
 export async function getSessionUserId() {
   const client = requireSupabase();
   const { data, error } = await client.auth.getUser();
@@ -113,10 +138,17 @@ export async function getSessionUserId() {
   return data.user?.id;
 }
 
-export async function signInOrSignUp(email: string, password: string, profile?: SignupProfile) {
+export async function signInWithPassword(email: string, password: string) {
   const client = requireSupabase();
   const { data, error } = await client.auth.signInWithPassword({ email, password });
-  if (!error && data.user) return data.user.id;
+  if (error) throw error;
+  if (!data.user) throw new Error("Supabase did not return a user.");
+  return data.user.id;
+}
+
+export async function signUpWithPassword(email: string, password: string, profile: SignupProfile) {
+  const client = requireSupabase();
+  const username = await resolveAvailableUsername(profile.username || email.split("@")[0]);
 
   const { data: signUpData, error: signUpError } = await client.auth.signUp({
     email,
@@ -124,7 +156,7 @@ export async function signInOrSignUp(email: string, password: string, profile?: 
     options: {
       data: {
         display_name: profile?.displayName || email.split("@")[0],
-        username: profile?.username,
+        username,
         bio: profile?.bio,
         location: profile?.location,
         website: profile?.website,
@@ -136,8 +168,32 @@ export async function signInOrSignUp(email: string, password: string, profile?: 
   if (signUpError) throw signUpError;
   if (!signUpData.user) throw new Error("Supabase did not return a user.");
   if (!signUpData.session) throw new Error("Check your email to confirm your CONNECT account, then sign in.");
-  await ensureProfile(signUpData.user.id, email, profile);
+  await ensureProfile(signUpData.user.id, email, { ...profile, username });
   return signUpData.user.id;
+}
+
+export async function sendMagicLink(email: string) {
+  const client = requireSupabase();
+  const { error } = await client.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin }
+  });
+  if (error) throw error;
+}
+
+export async function signInWithProvider(provider: "google" | "apple") {
+  const client = requireSupabase();
+  const { error } = await client.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: window.location.origin }
+  });
+  if (error) throw error;
+}
+
+export async function sendPhoneOtp(phone: string) {
+  const client = requireSupabase();
+  const { error } = await client.auth.signInWithOtp({ phone });
+  if (error) throw error;
 }
 
 export async function signOutReal() {
@@ -148,7 +204,7 @@ export async function signOutReal() {
 
 export async function ensureProfile(userId: string, email: string, profile?: SignupProfile) {
   const client = requireSupabase();
-  const username = email.split("@")[0].replace(/[^a-z0-9_]/gi, "").toLowerCase() || `user${userId.slice(0, 6)}`;
+  const username = await resolveAvailableUsername(profile?.username || email.split("@")[0], userId);
   const { data } = await client.from("profiles").select("*").eq("id", userId).maybeSingle();
   if (data) return toUser(data as ProfileRow);
 
@@ -157,9 +213,9 @@ export async function ensureProfile(userId: string, email: string, profile?: Sig
     .insert({
       id: userId,
       display_name: profile?.displayName || username,
-      username: `${(profile?.username || username).replace(/^@/, "").toLowerCase()}_${userId.slice(0, 5)}`,
-      avatar_url: profile?.avatarUrl,
-      banner_url: profile?.bannerUrl,
+      username,
+      avatar_url: profile?.avatarUrl || undefined,
+      banner_url: profile?.bannerUrl || undefined,
       bio: profile?.bio || "New to CONNECT.",
       location: profile?.location || "",
       website: profile?.website || ""
@@ -168,6 +224,27 @@ export async function ensureProfile(userId: string, email: string, profile?: Sig
     .single();
   if (error) throw error;
   return toUser(createdProfile as ProfileRow);
+}
+
+export async function updateProfileReal(userId: string, profile: ProfileUpdate) {
+  const client = requireSupabase();
+  const username = await resolveAvailableUsername(profile.username, userId);
+  const { data, error } = await client
+    .from("profiles")
+    .update({
+      display_name: profile.displayName.trim(),
+      username,
+      avatar_url: profile.avatarUrl.trim(),
+      banner_url: profile.bannerUrl.trim(),
+      bio: profile.bio.trim(),
+      location: profile.location.trim(),
+      website: profile.website.trim()
+    })
+    .eq("id", userId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return toUser(data as ProfileRow);
 }
 
 export async function loadConnectData() {

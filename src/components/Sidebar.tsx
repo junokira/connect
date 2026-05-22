@@ -13,12 +13,15 @@ const nav = [
 
 type Props = {
   currentUser: User;
+  activeView: "canvas" | "explore";
+  onHome: () => void;
+  onExplore: () => void;
   onCreate: () => void;
   onProfile: () => void;
   onSignOut: () => void;
 };
 
-export function Sidebar({ currentUser, onCreate, onProfile, onSignOut }: Props) {
+export function Sidebar({ currentUser, activeView, onHome, onExplore, onCreate, onProfile, onSignOut }: Props) {
   return (
     <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/82 p-5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/82 lg:block">
       <div className="mb-8">
@@ -29,8 +32,10 @@ export function Sidebar({ currentUser, onCreate, onProfile, onSignOut }: Props) 
         {nav.map(([label, Icon]) => (
           <button
             key={label}
-            onClick={label === "Create" ? onCreate : label === "Profile" ? onProfile : undefined}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+            onClick={label === "Create" ? onCreate : label === "Profile" ? onProfile : label === "Canvas" ? onHome : label === "Explore" ? onExplore : undefined}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium hover:bg-slate-100 dark:hover:bg-white/10 ${
+              (label === "Canvas" && activeView === "canvas") || (label === "Explore" && activeView === "explore") ? "bg-slate-100 text-slate-950 dark:bg-white/10 dark:text-white" : "text-slate-700 dark:text-slate-200"
+            }`}
           >
             <Icon size={20} />
             {label}
