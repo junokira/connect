@@ -9,7 +9,7 @@ CONNECT is an MVP social platform where the home feed is an infinite spatial can
 - TypeScript
 - Tailwind CSS
 - Zustand
-- Mock local persistence via `localStorage`
+- Supabase Auth, Postgres, and Storage
 
 ## Run
 
@@ -22,7 +22,7 @@ Open `http://127.0.0.1:5173`.
 
 ## Production Backend
 
-CONNECT runs in mock mode until Supabase environment variables are present. To make it real:
+CONNECT requires Supabase environment variables for auth, profiles, posts, comments, reactions, and media storage:
 
 1. Create a Supabase project.
 2. Run `supabase/schema.sql` in the Supabase SQL editor.
@@ -30,13 +30,13 @@ CONNECT runs in mock mode until Supabase environment variables are present. To m
 4. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 5. Restart `npm run dev`.
 
-For Vercel, add the same two environment variables in the Vercel project settings. Once those are set, CONNECT uses Supabase auth, profiles, posts, comments, likes, reposts, bookmarks, follows-ready tables, and persisted canvas coordinates.
+For Vercel, add the same two environment variables in the Vercel project settings. CONNECT uses Supabase auth, profiles, posts, comments, likes, reposts, bookmarks, follows-ready tables, media storage, and persisted canvas coordinates.
 
-Media is URL-based in this version. The database schema is ready for real media URLs; the next step is adding Supabase Storage upload controls.
+Media uploads use the `connect-media` Supabase Storage bucket created by `supabase/schema.sql`.
 
 ## MVP Features
 
-- Mock email sign-in.
+- Real email/password sign-in and sign-up through Supabase.
 - Infinite dotted canvas with pan, wheel zoom, pinch zoom, reset view, and jump to latest.
 - Viewport culling for canvas posts.
 - Text, photo, and video composer with draft preview.

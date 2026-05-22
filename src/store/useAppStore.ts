@@ -1,9 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { comments as seedComments, posts as seedPosts, users as seedUsers } from "../data/seed";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { addCommentReal, createPostReal, getSessionUserId, loadConnectData, reactToPostReal, signInOrSignUp, signOutReal, uploadMediaReal } from "../lib/supabaseData";
-import { CanvasView, Comment, FeedStyle, Post, PostType, SignupProfile, SortMode, User } from "../types";
+import { CanvasView, Comment, FeedStyle, Post, PostReaction, PostType, SignupProfile, SortMode, User } from "../types";
 import { placeNextPost } from "../utils/placement";
 
 type DraftInput = {
@@ -21,9 +20,10 @@ type AppState = {
   users: User[];
   posts: Post[];
   comments: Comment[];
+  reactions: PostReaction[];
   currentUserId: string;
   authed: boolean;
-  backendMode: "mock" | "supabase";
+  backendMode: "supabase";
   loading: boolean;
   error?: string;
   activePostId?: string;
@@ -77,34 +77,17 @@ const makePost = (draft: DraftInput, posts: Post[], authorId: string): Post => {
   };
 };
 
-const profileFromSignup = (email: string, profile?: SignupProfile): User => {
-  const id = `local-${crypto.randomUUID()}`;
-  const fallbackUsername = email.split("@")[0].replace(/[^a-z0-9_]/gi, "").toLowerCase() || `user${id.slice(6, 11)}`;
-  return {
-    id,
-    displayName: profile?.displayName.trim() || fallbackUsername,
-    username: (profile?.username.trim() || fallbackUsername).replace(/^@/, "").toLowerCase(),
-    avatarUrl: profile?.avatarUrl || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(profile?.displayName || fallbackUsername)}`,
-    bannerUrl: profile?.bannerUrl || "https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80",
-    bio: profile?.bio || "New to CONNECT.",
-    location: profile?.location || "",
-    website: profile?.website || "",
-    createdAt: new Date().toISOString(),
-    followersCount: 0,
-    followingCount: 0
-  };
-};
-
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      users: seedUsers,
-      posts: seedPosts,
-      comments: seedComments,
-      currentUserId: "u-1",
+      users: [],
+      posts: [],
+      comments: [],
+      reactions: [],
+      currentUserId: "",
       authed: false,
-      backendMode: isSupabaseConfigured ? "supabase" : "mock",
-      loading: isSupabaseConfigured,
+      backendMode: "supabase",
+      loading: true,
       error: undefined,
       activePostId: undefined,
       activeProfileId: undefined,
@@ -115,7 +98,12 @@ export const useAppStore = create<AppState>()(
       theme: "light",
       initialize: async () => {
         if (!isSupabaseConfigured) {
-          set({ backendMode: "mock", loading: false });
+          set({
+            backendMode: "supabase",
+            loading: false,
+            authed: false,
+            error: "CONNECT needs Supabase environment variables before launch: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY."
+          });
           return;
         }
         try {
@@ -133,20 +121,13 @@ export const useAppStore = create<AppState>()(
         }
       },
       refreshData: async () => {
-        if (!isSupabaseConfigured) return;
+        if (!isSupabaseConfigured) throw new Error("Supabase is not configured.");
         const data = await loadConnectData();
         set(data);
       },
-      signIn: async (email, password = "connect-demo-password", profile) => {
+      signIn: async (email, password = "", profile) => {
         if (!isSupabaseConfigured) {
-          const existingUser = get().users.find((user) => user.username === profile?.username || user.username === email.split("@")[0]);
-          const user = existingUser || profileFromSignup(email, profile);
-          set({
-            authed: true,
-            currentUserId: user.id,
-            activeProfileId: user.id,
-            users: existingUser ? get().users : [user, ...get().users]
-          });
+          set({ error: "Supabase is required for sign in. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel." });
           return;
         }
         try {
@@ -159,26 +140,25 @@ export const useAppStore = create<AppState>()(
         }
       },
       signOut: async () => {
-        if (isSupabaseConfigured) await signOutReal();
+        await signOutReal();
         set({ authed: false, currentUserId: "" });
       },
       createPost: async (draft) => {
+        if (!get().currentUserId) throw new Error("You must be signed in to create a post.");
         let imageUrl = draft.imageUrl;
         let videoUrl = draft.videoUrl;
         let thumbnailUrl = draft.thumbnailUrl;
         if (draft.mediaFile) {
-          const uploadedUrl = isSupabaseConfigured
-            ? await uploadMediaReal(draft.mediaFile, get().currentUserId)
-            : URL.createObjectURL(draft.mediaFile);
+          const uploadedUrl = await uploadMediaReal(draft.mediaFile, get().currentUserId);
           if (draft.type === "photo") imageUrl = uploadedUrl;
           if (draft.type === "video") videoUrl = uploadedUrl;
         }
         if (draft.thumbnailFile) {
-          thumbnailUrl = isSupabaseConfigured ? await uploadMediaReal(draft.thumbnailFile, get().currentUserId) : URL.createObjectURL(draft.thumbnailFile);
+          thumbnailUrl = await uploadMediaReal(draft.thumbnailFile, get().currentUserId);
         }
         const preparedDraft = { ...draft, imageUrl, videoUrl, thumbnailUrl };
-        const post = makePost(preparedDraft, get().posts, get().currentUserId || "u-1");
-        const savedPost = isSupabaseConfigured ? await createPostReal(post) : post;
+        const post = makePost(preparedDraft, get().posts, get().currentUserId);
+        const savedPost = await createPostReal(post);
         set({
           posts: [savedPost, ...get().posts],
           activePostId: savedPost.id,
@@ -193,26 +173,33 @@ export const useAppStore = create<AppState>()(
       setSearch: (search) => set({ search }),
       setCanvasView: (view) => set({ canvasView: view }),
       likePost: async (id) => {
-        if (isSupabaseConfigured) await reactToPostReal(id, get().currentUserId, "like");
+        const reaction = await reactToPostReal(id, get().currentUserId, "like");
+        if (!reaction) return;
         set({ posts: get().posts.map((post) => (post.id === id ? { ...post, likesCount: post.likesCount + 1 } : post)) });
       },
       repostPost: async (id) => {
-        if (isSupabaseConfigured) await reactToPostReal(id, get().currentUserId, "repost");
-        set({ posts: get().posts.map((post) => (post.id === id ? { ...post, repostsCount: post.repostsCount + 1 } : post)) });
+        const reaction = await reactToPostReal(id, get().currentUserId, "repost");
+        if (!reaction) return;
+        set({
+          reactions: [reaction, ...get().reactions],
+          posts: get().posts.map((post) => (post.id === id ? { ...post, repostsCount: post.repostsCount + 1 } : post))
+        });
       },
       bookmarkPost: async (id) => {
-        if (isSupabaseConfigured) await reactToPostReal(id, get().currentUserId, "bookmark");
+        const reaction = await reactToPostReal(id, get().currentUserId, "bookmark");
+        if (!reaction) return;
         set({ posts: get().posts.map((post) => (post.id === id ? { ...post, bookmarksCount: post.bookmarksCount + 1 } : post)) });
       },
       addComment: async (postId, content) => {
+        if (!get().currentUserId) throw new Error("You must be signed in to comment.");
         const comment: Comment = {
           id: crypto.randomUUID(),
           postId,
-          authorId: get().currentUserId || "u-1",
+          authorId: get().currentUserId,
           content,
           createdAt: new Date().toISOString()
         };
-        const savedComment = isSupabaseConfigured ? await addCommentReal(comment) : comment;
+        const savedComment = await addCommentReal(comment);
         set({
           comments: [savedComment, ...get().comments],
           posts: get().posts.map((post) => (post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post))
@@ -226,15 +213,8 @@ export const useAppStore = create<AppState>()(
         canvasView: state.canvasView,
         theme: state.theme,
         feedStyle: state.feedStyle,
-        ...(!isSupabaseConfigured
-          ? {
-              users: state.users,
-              posts: state.posts,
-              comments: state.comments,
-              currentUserId: state.currentUserId,
-              authed: state.authed
-            }
-          : {})
+        authed: state.authed,
+        currentUserId: state.currentUserId
       })
     }
   )

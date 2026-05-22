@@ -1,4 +1,4 @@
-import { Post, PostType, User, Comment, SignupProfile } from "../types";
+import { Comment, Post, PostReaction, PostType, SignupProfile, User } from "../types";
 import { supabase } from "./supabase";
 
 type ProfileRow = {
@@ -44,6 +44,13 @@ type CommentRow = {
   created_at: string;
 };
 
+type ReactionRow = {
+  post_id: string;
+  user_id: string;
+  type: "like" | "repost" | "bookmark";
+  created_at: string;
+};
+
 const toUser = (row: ProfileRow): User => ({
   id: row.id,
   displayName: row.display_name,
@@ -84,6 +91,13 @@ const toComment = (row: CommentRow): Comment => ({
   postId: row.post_id,
   authorId: row.author_id,
   content: row.content,
+  createdAt: row.created_at
+});
+
+const toReaction = (row: ReactionRow): PostReaction => ({
+  postId: row.post_id,
+  userId: row.user_id,
+  type: row.type,
   createdAt: row.created_at
 });
 
@@ -158,20 +172,28 @@ export async function ensureProfile(userId: string, email: string, profile?: Sig
 
 export async function loadConnectData() {
   const client = requireSupabase();
-  const [{ data: profiles, error: profilesError }, { data: posts, error: postsError }, { data: comments, error: commentsError }] = await Promise.all([
+  const [
+    { data: profiles, error: profilesError },
+    { data: posts, error: postsError },
+    { data: comments, error: commentsError },
+    { data: reactions, error: reactionsError }
+  ] = await Promise.all([
     client.from("profiles").select("*").order("created_at", { ascending: true }),
     client.from("posts").select("*").order("created_at", { ascending: false }),
-    client.from("comments").select("*").order("created_at", { ascending: false })
+    client.from("comments").select("*").order("created_at", { ascending: false }),
+    client.from("post_reactions").select("*").order("created_at", { ascending: false })
   ]);
 
   if (profilesError) throw profilesError;
   if (postsError) throw postsError;
   if (commentsError) throw commentsError;
+  if (reactionsError) throw reactionsError;
 
   return {
     users: (profiles || []).map((row) => toUser(row as ProfileRow)),
     posts: (posts || []).map((row) => toPost(row as PostRow)),
-    comments: (comments || []).map((row) => toComment(row as CommentRow))
+    comments: (comments || []).map((row) => toComment(row as CommentRow)),
+    reactions: (reactions || []).map((row) => toReaction(row as ReactionRow))
   };
 }
 
@@ -200,11 +222,12 @@ export async function createPostReal(post: Post) {
 
 export async function reactToPostReal(postId: string, userId: string, type: "like" | "repost" | "bookmark") {
   const client = requireSupabase();
-  const { error } = await client.from("post_reactions").insert({ post_id: postId, user_id: userId, type });
-  if (error?.message.includes("duplicate key")) return;
+  const { data, error } = await client.from("post_reactions").insert({ post_id: postId, user_id: userId, type }).select("*").single();
+  if (error?.message.includes("duplicate key")) return undefined;
   if (error) throw error;
   const counter = type === "like" ? "likes_count" : type === "repost" ? "reposts_count" : "bookmarks_count";
   await client.rpc("increment_post_counter", { target_post_id: postId, counter_name: counter });
+  return toReaction(data as ReactionRow);
 }
 
 export async function addCommentReal(comment: Comment) {

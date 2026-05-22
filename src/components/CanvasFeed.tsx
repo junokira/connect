@@ -14,6 +14,9 @@ type Props = {
   onOpenPost: (id: string) => void;
   onOpenProfile: (id: string) => void;
   onOpenFilters: () => void;
+  onLikePost: (id: string) => void;
+  onRepostPost: (id: string) => void;
+  onBookmarkPost: (id: string) => void;
 };
 
 const clampZoom = (zoom: number) => Math.max(0.35, Math.min(2.2, zoom));
@@ -39,9 +42,10 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: typeOffset + column * 80 - 80, y: row * 330 - 220 };
 };
 
-export function CanvasFeed({ posts, users, sortMode, feedStyle, search, view, onViewChange, onOpenPost, onOpenProfile, onOpenFilters }: Props) {
+export function CanvasFeed({ posts, users, sortMode, feedStyle, search, view, onViewChange, onOpenPost, onOpenProfile, onOpenFilters, onLikePost, onRepostPost, onBookmarkPost }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView } | null>(null);
+  const didDragRef = useRef(false);
   const viewRef = useRef(view);
   const frameRef = useRef<number | null>(null);
   const queuedViewRef = useRef<CanvasView | null>(null);
@@ -107,8 +111,9 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, search, view, on
   }, [positionedPosts, size.height, size.width, view]);
 
   const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest("article,button,input,select")) return;
+    if ((event.target as HTMLElement).closest("button,input,select,textarea,a,video")) return;
     updateSize();
+    didDragRef.current = false;
     dragRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, view };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -116,6 +121,7 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, search, view, on
   const pointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.id !== event.pointerId) return;
+    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 6) didDragRef.current = true;
     scheduleView({ ...viewRef.current, x: drag.view.x + event.clientX - drag.x, y: drag.view.y + event.clientY - drag.y });
   };
 
@@ -145,6 +151,11 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, search, view, on
       onPointerCancel={pointerUp}
       onTouchMove={touchMove}
       onTouchEnd={() => (touchRef.current = null)}
+      onClickCapture={(event) => {
+        if (!didDragRef.current) return;
+        event.stopPropagation();
+        didDragRef.current = false;
+      }}
     >
       <div className="canvas-dots absolute inset-0" style={{ backgroundPosition: `${view.x}px ${view.y}px`, backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px` }} />
       <div className="pointer-events-none absolute left-4 top-4 z-20 rounded-2xl border border-slate-200 bg-white/86 px-4 py-3 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/86 lg:left-6">
@@ -160,7 +171,17 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, search, view, on
           const emphasized = sortMode === "trending" || sortMode.startsWith("most");
           return (
             <div key={post.id} className="absolute will-change-transform" style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}>
-              <PostCard post={post} author={author} emphasized={emphasized} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(author.id)} />
+              <PostCard
+                post={post}
+                author={author}
+                emphasized={emphasized}
+                onOpen={() => onOpenPost(post.id)}
+                onProfile={() => onOpenProfile(author.id)}
+                onLike={() => onLikePost(post.id)}
+                onComment={() => onOpenPost(post.id)}
+                onRepost={() => onRepostPost(post.id)}
+                onBookmark={() => onBookmarkPost(post.id)}
+              />
             </div>
           );
         })}

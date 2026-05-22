@@ -1,4 +1,5 @@
 import { Bookmark, Heart, MessageCircle, Repeat2, Video } from "lucide-react";
+import { MouseEvent } from "react";
 import { Post, User } from "../types";
 import { formatCount } from "../utils/posts";
 
@@ -8,10 +9,18 @@ type Props = {
   emphasized?: boolean;
   onOpen: () => void;
   onProfile: () => void;
+  onLike: () => void;
+  onComment: () => void;
+  onRepost: () => void;
+  onBookmark: () => void;
 };
 
-export function PostCard({ post, author, emphasized, onOpen, onProfile }: Props) {
+export function PostCard({ post, author, emphasized, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
   const text = post.type === "text" ? post.content : post.caption;
+  const action = (handler: () => void) => (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    handler();
+  };
 
   return (
     <article
@@ -66,18 +75,18 @@ export function PostCard({ post, author, emphasized, onOpen, onProfile }: Props)
           ))}
         </div>
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <span className="flex items-center gap-1">
+          <button onClick={action(onLike)} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10" aria-label="Like post">
             <Heart size={14} /> {formatCount(post.likesCount)}
-          </span>
-          <span className="flex items-center gap-1">
+          </button>
+          <button onClick={action(onComment)} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-sky-400/10" aria-label="Comment on post">
             <MessageCircle size={14} /> {formatCount(post.commentsCount)}
-          </span>
-          <span className="flex items-center gap-1">
+          </button>
+          <button onClick={action(onRepost)} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-400/10" aria-label="Repost">
             <Repeat2 size={14} /> {formatCount(post.repostsCount)}
-          </span>
-          <span className="flex items-center gap-1">
+          </button>
+          <button onClick={action(onBookmark)} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-400/10" aria-label="Bookmark post">
             <Bookmark size={14} /> {formatCount(post.bookmarksCount)}
-          </span>
+          </button>
         </div>
       </div>
     </article>

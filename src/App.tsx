@@ -1,4 +1,4 @@
-import { LogIn, Moon, Search, SlidersHorizontal, Sun } from "lucide-react";
+import { Eye, LogIn, Moon, Search, SlidersHorizontal, Sun } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CanvasControls } from "./components/CanvasControls";
 import { CanvasFeed } from "./components/CanvasFeed";
@@ -35,9 +35,8 @@ function AuthGate() {
   const signIn = useAppStore((state) => state.signIn);
   const loading = useAppStore((state) => state.loading);
   const error = useAppStore((state) => state.error);
-  const backendMode = useAppStore((state) => state.backendMode);
-  const [email, setEmail] = useState("maya@example.com");
-  const [password, setPassword] = useState("connect-demo-password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
@@ -58,10 +57,10 @@ function AuthGate() {
   };
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[#f7f7f4] p-4 dark:bg-[#0e1116]">
-      <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-glass dark:border-white/10 dark:bg-slate-950">
+    <main className="h-[100dvh] overflow-y-auto bg-[#f7f7f4] p-4 dark:bg-[#0e1116]">
+      <form onSubmit={submit} className="mx-auto my-4 w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-glass dark:border-white/10 dark:bg-slate-950 sm:my-10">
         <p className="mb-1 text-2xl font-black text-slate-950 dark:text-white">CONNECT</p>
-        <p className="mb-6 text-sm text-slate-500">{backendMode === "supabase" ? "Sign in or create your CONNECT account." : "Mock sign-in for your spatial social canvas."}</p>
+        <p className="mb-6 text-sm text-slate-500">Sign in or create your CONNECT account.</p>
         <div className="mb-4 grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-sm font-semibold">Display name</span>
@@ -89,7 +88,7 @@ function AuthGate() {
         <label className="mb-2 block text-sm font-semibold">Password</label>
         <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mb-4 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
         {error ? <p className="mb-4 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
-        <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">
+        <button disabled={loading || !email || !password} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">
           <LogIn size={18} />
           {loading ? "Connecting..." : "Enter canvas"}
         </button>
@@ -149,6 +148,7 @@ export default function App() {
     users,
     posts,
     comments,
+    reactions,
     currentUserId,
     authed,
     backendMode,
@@ -176,6 +176,7 @@ export default function App() {
 
   const [composerOpen, setComposerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [chromeHidden, setChromeHidden] = useState(false);
 
   useEffect(() => {
     void initialize();
@@ -206,20 +207,25 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f7f7f4] text-slate-950 dark:bg-[#0e1116] dark:text-white">
-      <Sidebar currentUser={currentUser} onCreate={() => setComposerOpen(true)} onProfile={() => setActiveProfile(currentUser.id)} onSignOut={() => void signOut()} />
+      {!chromeHidden ? <Sidebar currentUser={currentUser} onCreate={() => setComposerOpen(true)} onProfile={() => setActiveProfile(currentUser.id)} onSignOut={() => void signOut()} /> : null}
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <header className="fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 lg:left-72">
-          <FilterBar />
-          {error ? <span className="hidden max-w-72 truncate rounded-2xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200 lg:block">{error}</span> : null}
-          <span className="hidden rounded-2xl border border-slate-200 bg-white/88 px-3 py-2 text-xs font-bold uppercase text-slate-500 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88 lg:block">
+        <header className={`fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 ${chromeHidden ? "" : "lg:left-72"}`}>
+          {!chromeHidden ? <FilterBar /> : null}
+          {!chromeHidden && error ? <span className="hidden max-w-72 truncate rounded-2xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200 lg:block">{error}</span> : null}
+          {!chromeHidden ? <span className="hidden rounded-2xl border border-slate-200 bg-white/88 px-3 py-2 text-xs font-bold uppercase text-slate-500 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88 lg:block">
             {backendMode}
-          </span>
-          <button onClick={toggleTheme} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Toggle theme">
+          </span> : null}
+          {!chromeHidden ? <button onClick={toggleTheme} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Toggle theme">
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-          <button onClick={() => setFiltersOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88 lg:hidden" aria-label="Filters">
+          </button> : null}
+          {!chromeHidden ? <button onClick={() => setFiltersOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88 lg:hidden" aria-label="Filters">
             <SlidersHorizontal size={18} />
-          </button>
+          </button> : null}
+          {chromeHidden ? (
+            <button onClick={() => setChromeHidden(false)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Show interface">
+              <Eye size={18} />
+            </button>
+          ) : null}
         </header>
 
         <CanvasFeed
@@ -233,18 +239,22 @@ export default function App() {
           onOpenPost={setActivePost}
           onOpenProfile={setActiveProfile}
           onOpenFilters={() => setFiltersOpen(true)}
+          onLikePost={(id) => void likePost(id)}
+          onRepostPost={(id) => void repostPost(id)}
+          onBookmarkPost={(id) => void bookmarkPost(id)}
         />
 
-        <CanvasControls
+        {!chromeHidden ? <CanvasControls
           zoom={canvasView.zoom}
           onZoomIn={() => zoomBy(0.12)}
           onZoomOut={() => zoomBy(-0.12)}
           onReset={() => setCanvasView({ x: 160, y: 120, zoom: 1 })}
           onLatest={() => latest && setCanvasView({ x: -latest.x + 320, y: -latest.y + 200, zoom: 1 })}
-        />
+          onHide={() => setChromeHidden(true)}
+        /> : null}
       </div>
 
-      <MobileNav onCreate={() => setComposerOpen(true)} onFilters={() => setFiltersOpen(true)} onProfile={() => setActiveProfile(currentUser.id)} />
+      {!chromeHidden ? <MobileNav onCreate={() => setComposerOpen(true)} onFilters={() => setFiltersOpen(true)} onProfile={() => setActiveProfile(currentUser.id)} /> : null}
 
       {filtersOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm lg:hidden">
@@ -268,7 +278,7 @@ export default function App() {
         onBookmark={() => activePost && bookmarkPost(activePost.id)}
         onComment={(content) => activePost && addComment(activePost.id, content)}
       />
-      <ProfileView user={activeProfile} users={users} posts={posts} onClose={() => setActiveProfile(undefined)} onOpenPost={setActivePost} />
+      <ProfileView user={activeProfile} users={users} posts={posts} reactions={reactions} onClose={() => setActiveProfile(undefined)} onOpenPost={setActivePost} />
     </div>
   );
 }

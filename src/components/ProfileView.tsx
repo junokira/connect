@@ -1,5 +1,5 @@
 import { CalendarDays, Link as LinkIcon, MapPin, X } from "lucide-react";
-import { Post, User } from "../types";
+import { Post, PostReaction, User } from "../types";
 import { formatCount, formatDate } from "../utils/posts";
 import { PostCard } from "./PostCard";
 
@@ -7,13 +7,15 @@ type Props = {
   user?: User;
   users: User[];
   posts: Post[];
+  reactions: PostReaction[];
   onClose: () => void;
   onOpenPost: (id: string) => void;
 };
 
-export function ProfileView({ user, users, posts, onClose, onOpenPost }: Props) {
+export function ProfileView({ user, users, posts, reactions, onClose, onOpenPost }: Props) {
   if (!user) return null;
-  const userPosts = posts.filter((post) => post.authorId === user.id);
+  const repostedIds = new Set(reactions.filter((reaction) => reaction.userId === user.id && reaction.type === "repost").map((reaction) => reaction.postId));
+  const userPosts = posts.filter((post) => post.authorId === user.id || repostedIds.has(post.id));
   const mediaPosts = userPosts.filter((post) => post.type !== "text");
   const pinned = userPosts.find((post) => post.pinned);
 
@@ -62,7 +64,17 @@ export function ProfileView({ user, users, posts, onClose, onOpenPost }: Props) 
         {pinned ? (
           <section className="px-4 py-6">
             <p className="mb-3 text-xs font-bold uppercase text-slate-400">Pinned post</p>
-            <PostCard post={pinned} author={user} emphasized onOpen={() => onOpenPost(pinned.id)} onProfile={() => undefined} />
+            <PostCard
+              post={pinned}
+              author={user}
+              emphasized
+              onOpen={() => onOpenPost(pinned.id)}
+              onProfile={() => undefined}
+              onLike={() => undefined}
+              onComment={() => onOpenPost(pinned.id)}
+              onRepost={() => undefined}
+              onBookmark={() => undefined}
+            />
           </section>
         ) : null}
 
@@ -71,7 +83,19 @@ export function ProfileView({ user, users, posts, onClose, onOpenPost }: Props) 
             <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Status feed</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               {userPosts.map((post) => (
-                <PostCard key={post.id} post={post} author={user} onOpen={() => onOpenPost(post.id)} onProfile={() => undefined} />
+                <div key={post.id} className="space-y-2">
+                  {post.authorId !== user.id ? <p className="text-xs font-bold uppercase text-emerald-600 dark:text-emerald-300">Reposted by @{user.username}</p> : null}
+                  <PostCard
+                    post={post}
+                    author={users.find((candidate) => candidate.id === post.authorId) || user}
+                    onOpen={() => onOpenPost(post.id)}
+                    onProfile={() => undefined}
+                    onLike={() => undefined}
+                    onComment={() => onOpenPost(post.id)}
+                    onRepost={() => undefined}
+                    onBookmark={() => undefined}
+                  />
+                </div>
               ))}
             </div>
           </div>

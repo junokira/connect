@@ -1,4 +1,4 @@
-import { LocateFixed, Maximize2, Minus, Plus } from "lucide-react";
+import { EyeOff, LocateFixed, Maximize2, Minus, Plus } from "lucide-react";
 
 type Props = {
   zoom: number;
@@ -6,9 +6,10 @@ type Props = {
   onZoomOut: () => void;
   onReset: () => void;
   onLatest: () => void;
+  onHide: () => void;
 };
 
-export function CanvasControls({ zoom, onZoomIn, onZoomOut, onReset, onLatest }: Props) {
+export function CanvasControls({ zoom, onZoomIn, onZoomOut, onReset, onLatest, onHide }: Props) {
   return (
     <div className="fixed bottom-24 right-4 z-30 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/88 p-2 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88 lg:bottom-5">
       <button className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" onClick={onZoomOut} aria-label="Zoom out">
@@ -23,6 +24,9 @@ export function CanvasControls({ zoom, onZoomIn, onZoomOut, onReset, onLatest }:
       </button>
       <button className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" onClick={onLatest} aria-label="Jump to latest">
         <LocateFixed size={18} />
+      </button>
+      <button className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" onClick={onHide} aria-label="Hide canvas controls">
+        <EyeOff size={18} />
       </button>
     </div>
   );

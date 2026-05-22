@@ -27,6 +27,13 @@ export type User = {
   followingCount: number;
 };
 
+export type PostReaction = {
+  postId: string;
+  userId: string;
+  type: "like" | "repost" | "bookmark";
+  createdAt: string;
+};
+
 export type SignupProfile = {
   displayName: string;
   username: string;
