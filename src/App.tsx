@@ -26,23 +26,30 @@ const sortOptions: { value: SortMode; label: string }[] = [
 
 function AuthGate() {
   const signIn = useAppStore((state) => state.signIn);
+  const loading = useAppStore((state) => state.loading);
+  const error = useAppStore((state) => state.error);
+  const backendMode = useAppStore((state) => state.backendMode);
   const [email, setEmail] = useState("maya@example.com");
+  const [password, setPassword] = useState("connect-demo-password");
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    signIn(email);
+    void signIn(email, password);
   };
 
   return (
     <main className="grid min-h-screen place-items-center bg-[#f7f7f4] p-4 dark:bg-[#0e1116]">
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-glass dark:border-white/10 dark:bg-slate-950">
         <p className="mb-1 text-2xl font-black text-slate-950 dark:text-white">CONNECT</p>
-        <p className="mb-6 text-sm text-slate-500">Mock sign-in for your spatial social canvas.</p>
+        <p className="mb-6 text-sm text-slate-500">{backendMode === "supabase" ? "Sign in or create your CONNECT account." : "Mock sign-in for your spatial social canvas."}</p>
         <label className="mb-2 block text-sm font-semibold">Email</label>
         <input value={email} onChange={(event) => setEmail(event.target.value)} className="mb-4 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
-        <button className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white dark:bg-white dark:text-slate-950">
+        <label className="mb-2 block text-sm font-semibold">Password</label>
+        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mb-4 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
+        {error ? <p className="mb-4 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
+        <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">
           <LogIn size={18} />
-          Enter canvas
+          {loading ? "Connecting..." : "Enter canvas"}
         </button>
       </form>
     </main>
@@ -91,6 +98,9 @@ export default function App() {
     comments,
     currentUserId,
     authed,
+    backendMode,
+    loading,
+    error,
     activePostId,
     activeProfileId,
     sortMode,
@@ -107,21 +117,34 @@ export default function App() {
     addComment,
     toggleTheme
   } = useAppStore();
+  const initialize = useAppStore((state) => state.initialize);
 
   const [composerOpen, setComposerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
+    void initialize();
+  }, [initialize]);
+
+  useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
 
-  const currentUser = users.find((user) => user.id === currentUserId)!;
+  const currentUser = users.find((user) => user.id === currentUserId) || users[0];
   const filteredPosts = useMemo(() => getFilteredPosts(posts, users, sortMode, search), [posts, search, sortMode, users]);
   const activePost = posts.find((post) => post.id === activePostId);
   const activeAuthor = activePost ? users.find((user) => user.id === activePost.authorId) : undefined;
   const activeProfile = users.find((user) => user.id === activeProfileId);
 
-  if (!authed) return <AuthGate />;
+  if (loading && !authed) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#f7f7f4] p-4 text-slate-950 dark:bg-[#0e1116] dark:text-white">
+        <p className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold shadow-glass dark:border-white/10 dark:bg-slate-950">Loading CONNECT...</p>
+      </main>
+    );
+  }
+
+  if (!authed || !currentUser) return <AuthGate />;
 
   const zoomBy = (amount: number) => setCanvasView({ ...canvasView, zoom: Math.max(0.35, Math.min(2.2, canvasView.zoom + amount)) });
   const latest = [...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
@@ -132,6 +155,10 @@ export default function App() {
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 lg:left-72">
           <FilterBar />
+          {error ? <span className="hidden max-w-72 truncate rounded-2xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200 lg:block">{error}</span> : null}
+          <span className="hidden rounded-2xl border border-slate-200 bg-white/88 px-3 py-2 text-xs font-bold uppercase text-slate-500 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88 lg:block">
+            {backendMode}
+          </span>
           <button onClick={toggleTheme} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Toggle theme">
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>

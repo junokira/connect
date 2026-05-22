@@ -20,6 +20,20 @@ npm run dev
 
 Open `http://127.0.0.1:5173`.
 
+## Production Backend
+
+CONNECT runs in mock mode until Supabase environment variables are present. To make it real:
+
+1. Create a Supabase project.
+2. Run `supabase/schema.sql` in the Supabase SQL editor.
+3. Copy `.env.example` to `.env.local`.
+4. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+5. Restart `npm run dev`.
+
+For Vercel, add the same two environment variables in the Vercel project settings. Once those are set, CONNECT uses Supabase auth, profiles, posts, comments, likes, reposts, bookmarks, follows-ready tables, and persisted canvas coordinates.
+
+Media is URL-based in this version. The database schema is ready for real media URLs; the next step is adding Supabase Storage upload controls.
+
 ## MVP Features
 
 - Mock email sign-in.

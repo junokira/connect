@@ -6,7 +6,7 @@ type Props = {
   open: boolean;
   currentUser: User;
   onClose: () => void;
-  onPublish: (draft: { type: PostType; content: string; caption: string; imageUrl?: string; videoUrl?: string; thumbnailUrl?: string }) => void;
+  onPublish: (draft: { type: PostType; content: string; caption: string; imageUrl?: string; videoUrl?: string; thumbnailUrl?: string }) => void | Promise<unknown>;
 };
 
 const sampleImage = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80";
@@ -24,10 +24,10 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
 
   if (!open) return null;
 
-  const publish = (event: FormEvent) => {
+  const publish = async (event: FormEvent) => {
     event.preventDefault();
     if (!preview.trim()) return;
-    onPublish({
+    await onPublish({
       type,
       content,
       caption,
