@@ -9,22 +9,23 @@ type Props = {
   onPublish: (draft: { type: PostType; content: string; caption: string; imageUrl?: string; videoUrl?: string; thumbnailUrl?: string; mediaFile?: File; thumbnailFile?: File }) => void | Promise<unknown>;
 };
 
-const sampleImage = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80";
-const sampleVideo = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
-
 export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   const [type, setType] = useState<PostType>("text");
   const [content, setContent] = useState("");
   const [caption, setCaption] = useState("");
-  const [imageUrl, setImageUrl] = useState(sampleImage);
-  const [videoUrl, setVideoUrl] = useState(sampleVideo);
-  const [thumbnailUrl, setThumbnailUrl] = useState(sampleImage);
+  const [imageUrl, setImageUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [mediaFile, setMediaFile] = useState<File | undefined>();
   const [thumbnailFile, setThumbnailFile] = useState<File | undefined>();
   const [mediaPreview, setMediaPreview] = useState("");
   const [thumbnailPreview, setThumbnailPreview] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState("");
 
   const preview = useMemo(() => (type === "text" ? content : caption), [caption, content, type]);
+  const hasMedia = type === "photo" ? Boolean(mediaFile || imageUrl.trim()) : type === "video" ? Boolean(mediaFile || videoUrl.trim()) : true;
+  const canPublish = type === "text" ? Boolean(content.trim()) : hasMedia;
 
   useEffect(() => {
     if (!mediaFile) {
@@ -50,22 +51,33 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
 
   const publish = async (event: FormEvent) => {
     event.preventDefault();
-    if (!preview.trim()) return;
-    await onPublish({
-      type,
-      content,
-      caption,
-      imageUrl: type === "photo" ? imageUrl : undefined,
-      videoUrl: type === "video" ? videoUrl : undefined,
-      thumbnailUrl: type === "video" ? thumbnailUrl : undefined,
-      mediaFile,
-      thumbnailFile
-    });
-    setContent("");
-    setCaption("");
-    setMediaFile(undefined);
-    setThumbnailFile(undefined);
-    onClose();
+    if (!canPublish || publishing) return;
+    try {
+      setPublishing(true);
+      setError("");
+      await onPublish({
+        type,
+        content,
+        caption,
+        imageUrl: type === "photo" ? imageUrl.trim() : undefined,
+        videoUrl: type === "video" ? videoUrl.trim() : undefined,
+        thumbnailUrl: type === "video" ? thumbnailUrl.trim() : undefined,
+        mediaFile,
+        thumbnailFile
+      });
+      setContent("");
+      setCaption("");
+      setImageUrl("");
+      setVideoUrl("");
+      setThumbnailUrl("");
+      setMediaFile(undefined);
+      setThumbnailFile(undefined);
+      onClose();
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : "Could not publish this post. Please try again.");
+    } finally {
+      setPublishing(false);
+    }
   };
 
   return (
@@ -119,7 +131,7 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
               value={type === "photo" ? imageUrl : videoUrl}
               onChange={(event) => (type === "photo" ? setImageUrl(event.target.value) : setVideoUrl(event.target.value))}
               className="w-full rounded-xl border border-slate-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-teal-500 dark:border-white/10"
-              placeholder={type === "photo" ? "Image URL" : "Video URL"}
+              placeholder={type === "photo" ? "Paste image URL or choose a photo" : "Paste video URL or choose a video"}
             />
             <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-3 text-sm font-semibold text-slate-600 hover:border-teal-500 hover:text-teal-700 dark:border-white/15 dark:text-slate-300 dark:hover:text-teal-200">
               <Upload size={17} />
@@ -150,18 +162,20 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
         )}
 
         <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
-          {type === "photo" && (mediaPreview || imageUrl) ? <img className="h-56 w-full object-cover" src={mediaPreview || imageUrl} alt="" /> : null}
-          {type === "video" && mediaPreview ? <video className="h-56 w-full object-cover" src={mediaPreview} controls /> : null}
-          {type === "video" && !mediaPreview && (thumbnailPreview || thumbnailUrl) ? <img className="h-56 w-full object-cover" src={thumbnailPreview || thumbnailUrl} alt="" /> : null}
+          {type === "photo" && (mediaPreview || imageUrl) ? <img className="max-h-[420px] w-full bg-slate-100 object-contain dark:bg-black" src={mediaPreview || imageUrl} alt="" /> : null}
+          {type === "video" && mediaPreview ? <video className="max-h-[420px] w-full bg-black object-contain" src={mediaPreview} controls /> : null}
+          {type === "video" && !mediaPreview && videoUrl ? <video className="max-h-[420px] w-full bg-black object-contain" src={videoUrl} poster={thumbnailPreview || thumbnailUrl} controls /> : null}
+          {type === "video" && !mediaPreview && !videoUrl && (thumbnailPreview || thumbnailUrl) ? <img className="max-h-[420px] w-full bg-slate-100 object-contain dark:bg-black" src={thumbnailPreview || thumbnailUrl} alt="" /> : null}
           <div className="p-4">
             <p className="mb-1 text-xs font-semibold uppercase text-slate-400">Draft preview</p>
-            <p className="min-h-8 text-sm text-slate-700 dark:text-slate-200">{preview || "Your post preview will appear here."}</p>
+            <p className="min-h-8 text-sm text-slate-700 dark:text-slate-200">{preview || (type === "text" ? "Your post preview will appear here." : "Media posts can publish with or without a caption.")}</p>
           </div>
         </div>
 
-        <button type="submit" className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950" disabled={!preview.trim()}>
+        {error ? <p className="mt-4 rounded-2xl bg-rose-50 p-3 text-sm font-medium text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
+        <button type="submit" className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950" disabled={!canPublish || publishing}>
           <Send size={18} />
-          Publish to canvas
+          {publishing ? "Publishing..." : "Publish to canvas"}
         </button>
       </form>
     </div>

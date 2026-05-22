@@ -173,22 +173,35 @@ export const useAppStore = create<AppState>()(
       setSearch: (search) => set({ search }),
       setCanvasView: (view) => set({ canvasView: view }),
       likePost: async (id) => {
-        const reaction = await reactToPostReal(id, get().currentUserId, "like");
-        if (!reaction) return;
-        set({ posts: get().posts.map((post) => (post.id === id ? { ...post, likesCount: post.likesCount + 1 } : post)) });
+        try {
+          const reaction = await reactToPostReal(id, get().currentUserId, "like");
+          if (!reaction) return;
+          set({ posts: get().posts.map((post) => (post.id === id ? { ...post, likesCount: post.likesCount + 1 } : post)), error: undefined });
+        } catch (error) {
+          set({ error: error instanceof Error ? error.message : "Could not like this post." });
+        }
       },
       repostPost: async (id) => {
-        const reaction = await reactToPostReal(id, get().currentUserId, "repost");
-        if (!reaction) return;
-        set({
-          reactions: [reaction, ...get().reactions],
-          posts: get().posts.map((post) => (post.id === id ? { ...post, repostsCount: post.repostsCount + 1 } : post))
-        });
+        try {
+          const reaction = await reactToPostReal(id, get().currentUserId, "repost");
+          if (!reaction) return;
+          set({
+            reactions: [reaction, ...get().reactions],
+            posts: get().posts.map((post) => (post.id === id ? { ...post, repostsCount: post.repostsCount + 1 } : post)),
+            error: undefined
+          });
+        } catch (error) {
+          set({ error: error instanceof Error ? error.message : "Could not repost this post." });
+        }
       },
       bookmarkPost: async (id) => {
-        const reaction = await reactToPostReal(id, get().currentUserId, "bookmark");
-        if (!reaction) return;
-        set({ posts: get().posts.map((post) => (post.id === id ? { ...post, bookmarksCount: post.bookmarksCount + 1 } : post)) });
+        try {
+          const reaction = await reactToPostReal(id, get().currentUserId, "bookmark");
+          if (!reaction) return;
+          set({ posts: get().posts.map((post) => (post.id === id ? { ...post, bookmarksCount: post.bookmarksCount + 1 } : post)), error: undefined });
+        } catch (error) {
+          set({ error: error instanceof Error ? error.message : "Could not bookmark this post." });
+        }
       },
       addComment: async (postId, content) => {
         if (!get().currentUserId) throw new Error("You must be signed in to comment.");

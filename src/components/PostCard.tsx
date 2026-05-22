@@ -49,13 +49,13 @@ export function PostCard({ post, author, emphasized, onOpen, onProfile, onLike, 
         </span>
       </div>
 
-      {post.type === "photo" && post.imageUrl ? <img className="h-44 w-full object-cover" src={post.imageUrl} alt="" loading="lazy" /> : null}
+      {post.type === "photo" && post.imageUrl ? <img className="max-h-72 w-full bg-slate-100 object-contain dark:bg-black" src={post.imageUrl} alt="" loading="lazy" /> : null}
       {post.type === "video" && (post.thumbnailUrl || post.videoUrl) ? (
-        <div className="relative h-44">
+        <div className="relative max-h-72 bg-black">
           {post.thumbnailUrl ? (
-            <img className="h-full w-full object-cover" src={post.thumbnailUrl} alt="" loading="lazy" />
+            <img className="max-h-72 w-full object-contain" src={post.thumbnailUrl} alt="" loading="lazy" />
           ) : (
-            <video className="h-full w-full object-cover" src={post.videoUrl} muted preload="metadata" />
+            <video className="max-h-72 w-full object-contain" src={post.videoUrl} muted preload="metadata" />
           )}
           <div className="absolute inset-0 grid place-items-center bg-black/20">
             <span className="grid h-12 w-12 place-items-center rounded-full bg-white/90 text-slate-950">
