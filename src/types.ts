@@ -1,0 +1,61 @@
+export type PostType = "text" | "photo" | "video";
+export type SortMode =
+  | "newest"
+  | "oldest"
+  | "most-liked"
+  | "most-commented"
+  | "most-reposted"
+  | "trending"
+  | "media-only"
+  | "text-only"
+  | "photos-only"
+  | "videos-only";
+
+export type User = {
+  id: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string;
+  bannerUrl: string;
+  bio: string;
+  location: string;
+  website: string;
+  createdAt: string;
+  followersCount: number;
+  followingCount: number;
+};
+
+export type Post = {
+  id: string;
+  authorId: string;
+  type: PostType;
+  content: string;
+  caption: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  x: number;
+  y: number;
+  createdAt: string;
+  updatedAt: string;
+  likesCount: number;
+  commentsCount: number;
+  repostsCount: number;
+  bookmarksCount: number;
+  hashtags: string[];
+  pinned?: boolean;
+};
+
+export type Comment = {
+  id: string;
+  postId: string;
+  authorId: string;
+  content: string;
+  createdAt: string;
+};
+
+export type CanvasView = {
+  x: number;
+  y: number;
+  zoom: number;
+};
