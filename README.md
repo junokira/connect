@@ -41,7 +41,10 @@ Media is URL-based in this version. The database schema is ready for real media 
 - Viewport culling for canvas posts.
 - Text, photo, and video composer with draft preview.
 - Sorting, media filters, post type filters, and search by keyword, username, hashtag, or type.
+- Feed style modes: Classic, Signal Clusters, Gallery Flow, and Orbit.
 - Click or tap post cards to open detailed modal.
 - Like, comment, repost, bookmark, and share actions.
+- First-open onboarding creates a profile that is reflected in the profile view and used for new posts.
+- Photo/video file pickers work with mobile photo libraries, including iPhone Safari.
 - Responsive desktop sidebar and mobile bottom navigation.
 - X-style profile pages with Instagram-like media grid.

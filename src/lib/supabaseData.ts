@@ -1,4 +1,4 @@
-import { Post, PostType, User, Comment } from "../types";
+import { Post, PostType, User, Comment, SignupProfile } from "../types";
 import { supabase } from "./supabase";
 
 type ProfileRow = {
@@ -99,7 +99,7 @@ export async function getSessionUserId() {
   return data.user?.id;
 }
 
-export async function signInOrSignUp(email: string, password: string) {
+export async function signInOrSignUp(email: string, password: string, profile?: SignupProfile) {
   const client = requireSupabase();
   const { data, error } = await client.auth.signInWithPassword({ email, password });
   if (!error && data.user) return data.user.id;
@@ -107,12 +107,22 @@ export async function signInOrSignUp(email: string, password: string) {
   const { data: signUpData, error: signUpError } = await client.auth.signUp({
     email,
     password,
-    options: { data: { display_name: email.split("@")[0] } }
+    options: {
+      data: {
+        display_name: profile?.displayName || email.split("@")[0],
+        username: profile?.username,
+        bio: profile?.bio,
+        location: profile?.location,
+        website: profile?.website,
+        avatar_url: profile?.avatarUrl,
+        banner_url: profile?.bannerUrl
+      }
+    }
   });
   if (signUpError) throw signUpError;
   if (!signUpData.user) throw new Error("Supabase did not return a user.");
   if (!signUpData.session) throw new Error("Check your email to confirm your CONNECT account, then sign in.");
-  await ensureProfile(signUpData.user.id, email);
+  await ensureProfile(signUpData.user.id, email, profile);
   return signUpData.user.id;
 }
 
@@ -122,26 +132,28 @@ export async function signOutReal() {
   if (error) throw error;
 }
 
-export async function ensureProfile(userId: string, email: string) {
+export async function ensureProfile(userId: string, email: string, profile?: SignupProfile) {
   const client = requireSupabase();
   const username = email.split("@")[0].replace(/[^a-z0-9_]/gi, "").toLowerCase() || `user${userId.slice(0, 6)}`;
   const { data } = await client.from("profiles").select("*").eq("id", userId).maybeSingle();
   if (data) return toUser(data as ProfileRow);
 
-  const { data: profile, error } = await client
+  const { data: createdProfile, error } = await client
     .from("profiles")
     .insert({
       id: userId,
-      display_name: username,
-      username: `${username}_${userId.slice(0, 5)}`,
-      bio: "New to CONNECT.",
-      location: "",
-      website: ""
+      display_name: profile?.displayName || username,
+      username: `${(profile?.username || username).replace(/^@/, "").toLowerCase()}_${userId.slice(0, 5)}`,
+      avatar_url: profile?.avatarUrl,
+      banner_url: profile?.bannerUrl,
+      bio: profile?.bio || "New to CONNECT.",
+      location: profile?.location || "",
+      website: profile?.website || ""
     })
     .select("*")
     .single();
   if (error) throw error;
-  return toUser(profile as ProfileRow);
+  return toUser(createdProfile as ProfileRow);
 }
 
 export async function loadConnectData() {
@@ -205,4 +217,18 @@ export async function addCommentReal(comment: Comment) {
   if (error) throw error;
   await client.rpc("increment_post_counter", { target_post_id: comment.postId, counter_name: "comments_count" });
   return toComment(data as CommentRow);
+}
+
+export async function uploadMediaReal(file: File, userId: string) {
+  const client = requireSupabase();
+  const extension = file.name.split(".").pop() || "bin";
+  const path = `${userId}/${crypto.randomUUID()}.${extension}`;
+  const { error } = await client.storage.from("connect-media").upload(path, file, {
+    cacheControl: "3600",
+    contentType: file.type,
+    upsert: false
+  });
+  if (error) throw error;
+  const { data } = client.storage.from("connect-media").getPublicUrl(path);
+  return data.publicUrl;
 }

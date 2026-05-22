@@ -73,11 +73,16 @@ begin
     base_username := 'user';
   end if;
 
-  insert into public.profiles (id, display_name, username)
+  insert into public.profiles (id, display_name, username, avatar_url, banner_url, bio, location, website)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'display_name', base_username),
-    base_username || '_' || left(new.id::text, 5)
+    coalesce(nullif(new.raw_user_meta_data->>'username', ''), base_username) || '_' || left(new.id::text, 5),
+    coalesce(nullif(new.raw_user_meta_data->>'avatar_url', ''), 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80'),
+    coalesce(nullif(new.raw_user_meta_data->>'banner_url', ''), 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80'),
+    coalesce(nullif(new.raw_user_meta_data->>'bio', ''), 'New to CONNECT.'),
+    coalesce(new.raw_user_meta_data->>'location', ''),
+    coalesce(new.raw_user_meta_data->>'website', '')
   )
   on conflict (id) do nothing;
 
@@ -89,6 +94,18 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+insert into storage.buckets (id, name, public)
+values ('connect-media', 'connect-media', true)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "connect media is public" on storage.objects;
+create policy "connect media is public" on storage.objects
+  for select using (bucket_id = 'connect-media');
+
+drop policy if exists "users upload own connect media" on storage.objects;
+create policy "users upload own connect media" on storage.objects
+  for insert with check (bucket_id = 'connect-media' and auth.uid()::text = (storage.foldername(name))[1]);
 
 alter table public.profiles enable row level security;
 alter table public.posts enable row level security;

@@ -1,12 +1,12 @@
-import { Image, Send, Video } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { Image, Send, Upload, Video } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { PostType, User } from "../types";
 
 type Props = {
   open: boolean;
   currentUser: User;
   onClose: () => void;
-  onPublish: (draft: { type: PostType; content: string; caption: string; imageUrl?: string; videoUrl?: string; thumbnailUrl?: string }) => void | Promise<unknown>;
+  onPublish: (draft: { type: PostType; content: string; caption: string; imageUrl?: string; videoUrl?: string; thumbnailUrl?: string; mediaFile?: File; thumbnailFile?: File }) => void | Promise<unknown>;
 };
 
 const sampleImage = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80";
@@ -19,8 +19,32 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   const [imageUrl, setImageUrl] = useState(sampleImage);
   const [videoUrl, setVideoUrl] = useState(sampleVideo);
   const [thumbnailUrl, setThumbnailUrl] = useState(sampleImage);
+  const [mediaFile, setMediaFile] = useState<File | undefined>();
+  const [thumbnailFile, setThumbnailFile] = useState<File | undefined>();
+  const [mediaPreview, setMediaPreview] = useState("");
+  const [thumbnailPreview, setThumbnailPreview] = useState("");
 
   const preview = useMemo(() => (type === "text" ? content : caption), [caption, content, type]);
+
+  useEffect(() => {
+    if (!mediaFile) {
+      setMediaPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(mediaFile);
+    setMediaPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [mediaFile]);
+
+  useEffect(() => {
+    if (!thumbnailFile) {
+      setThumbnailPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(thumbnailFile);
+    setThumbnailPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [thumbnailFile]);
 
   if (!open) return null;
 
@@ -33,10 +57,14 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
       caption,
       imageUrl: type === "photo" ? imageUrl : undefined,
       videoUrl: type === "video" ? videoUrl : undefined,
-      thumbnailUrl: type === "video" ? thumbnailUrl : undefined
+      thumbnailUrl: type === "video" ? thumbnailUrl : undefined,
+      mediaFile,
+      thumbnailFile
     });
     setContent("");
     setCaption("");
+    setMediaFile(undefined);
+    setThumbnailFile(undefined);
     onClose();
   };
 
@@ -93,20 +121,38 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
               className="w-full rounded-xl border border-slate-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-teal-500 dark:border-white/10"
               placeholder={type === "photo" ? "Image URL" : "Video URL"}
             />
-            {type === "video" ? (
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-3 text-sm font-semibold text-slate-600 hover:border-teal-500 hover:text-teal-700 dark:border-white/15 dark:text-slate-300 dark:hover:text-teal-200">
+              <Upload size={17} />
+              {type === "photo" ? "Choose photo from library" : "Choose video from library"}
               <input
-                value={thumbnailUrl}
-                onChange={(event) => setThumbnailUrl(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-teal-500 dark:border-white/10"
-                placeholder="Thumbnail URL"
+                className="sr-only"
+                type="file"
+                accept={type === "photo" ? "image/*" : "video/*"}
+                onChange={(event) => setMediaFile(event.target.files?.[0])}
               />
+            </label>
+            {type === "video" ? (
+              <>
+                <input
+                  value={thumbnailUrl}
+                  onChange={(event) => setThumbnailUrl(event.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-teal-500 dark:border-white/10"
+                  placeholder="Thumbnail URL"
+                />
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-3 text-sm font-semibold text-slate-600 hover:border-teal-500 hover:text-teal-700 dark:border-white/15 dark:text-slate-300 dark:hover:text-teal-200">
+                  <Upload size={17} />
+                  Choose thumbnail from library
+                  <input className="sr-only" type="file" accept="image/*" onChange={(event) => setThumbnailFile(event.target.files?.[0])} />
+                </label>
+              </>
             ) : null}
           </div>
         )}
 
         <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
-          {type === "photo" && imageUrl ? <img className="h-56 w-full object-cover" src={imageUrl} alt="" /> : null}
-          {type === "video" && thumbnailUrl ? <img className="h-56 w-full object-cover" src={thumbnailUrl} alt="" /> : null}
+          {type === "photo" && (mediaPreview || imageUrl) ? <img className="h-56 w-full object-cover" src={mediaPreview || imageUrl} alt="" /> : null}
+          {type === "video" && mediaPreview ? <video className="h-56 w-full object-cover" src={mediaPreview} controls /> : null}
+          {type === "video" && !mediaPreview && (thumbnailPreview || thumbnailUrl) ? <img className="h-56 w-full object-cover" src={thumbnailPreview || thumbnailUrl} alt="" /> : null}
           <div className="p-4">
             <p className="mb-1 text-xs font-semibold uppercase text-slate-400">Draft preview</p>
             <p className="min-h-8 text-sm text-slate-700 dark:text-slate-200">{preview || "Your post preview will appear here."}</p>

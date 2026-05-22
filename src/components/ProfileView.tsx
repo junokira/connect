@@ -29,12 +29,12 @@ export function ProfileView({ user, users, posts, onClose, onOpenPost }: Props) 
         </button>
       </header>
       <div className="mx-auto max-w-6xl pb-24">
-        <div className="relative h-48 overflow-hidden sm:h-64">
+        <div className="relative z-0 h-48 overflow-hidden sm:h-64">
           <img className="h-full w-full object-cover" src={user.bannerUrl} alt="" />
         </div>
-        <section className="px-4 pb-6">
+        <section className="relative z-10 px-4 pb-6">
           <div className="-mt-14 flex flex-wrap items-end justify-between gap-4">
-            <img className="h-28 w-28 rounded-full border-4 border-white object-cover shadow-xl dark:border-slate-950" src={user.avatarUrl} alt="" />
+            <img className="relative z-20 h-28 w-28 rounded-full border-4 border-white bg-white object-cover shadow-xl dark:border-slate-950 dark:bg-slate-950" src={user.avatarUrl} alt="" />
             <button className="rounded-full bg-slate-950 px-5 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">Follow</button>
           </div>
           <div className="mt-4">

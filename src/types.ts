@@ -11,6 +11,8 @@ export type SortMode =
   | "photos-only"
   | "videos-only";
 
+export type FeedStyle = "classic" | "signal" | "gallery" | "orbit";
+
 export type User = {
   id: string;
   displayName: string;
@@ -23,6 +25,16 @@ export type User = {
   createdAt: string;
   followersCount: number;
   followingCount: number;
+};
+
+export type SignupProfile = {
+  displayName: string;
+  username: string;
+  bio: string;
+  location: string;
+  website: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
 };
 
 export type Post = {

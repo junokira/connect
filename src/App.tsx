@@ -8,7 +8,7 @@ import { PostModal } from "./components/PostModal";
 import { ProfileView } from "./components/ProfileView";
 import { Sidebar } from "./components/Sidebar";
 import { useAppStore } from "./store/useAppStore";
-import { SortMode } from "./types";
+import { FeedStyle, SortMode } from "./types";
 import { getFilteredPosts } from "./utils/posts";
 
 const sortOptions: { value: SortMode; label: string }[] = [
@@ -24,6 +24,13 @@ const sortOptions: { value: SortMode; label: string }[] = [
   { value: "videos-only", label: "Videos only" }
 ];
 
+const feedStyles: { value: FeedStyle; label: string }[] = [
+  { value: "classic", label: "Classic" },
+  { value: "signal", label: "Signal Clusters" },
+  { value: "gallery", label: "Gallery Flow" },
+  { value: "orbit", label: "Orbit" }
+];
+
 function AuthGate() {
   const signIn = useAppStore((state) => state.signIn);
   const loading = useAppStore((state) => state.loading);
@@ -31,10 +38,23 @@ function AuthGate() {
   const backendMode = useAppStore((state) => state.backendMode);
   const [email, setEmail] = useState("maya@example.com");
   const [password, setPassword] = useState("connect-demo-password");
+  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [bio, setBio] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [bannerUrl, setBannerUrl] = useState("");
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    void signIn(email, password);
+    void signIn(email, password, {
+      displayName,
+      username,
+      bio,
+      location: "",
+      website: "",
+      avatarUrl,
+      bannerUrl
+    });
   };
 
   return (
@@ -42,6 +62,28 @@ function AuthGate() {
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-glass dark:border-white/10 dark:bg-slate-950">
         <p className="mb-1 text-2xl font-black text-slate-950 dark:text-white">CONNECT</p>
         <p className="mb-6 text-sm text-slate-500">{backendMode === "supabase" ? "Sign in or create your CONNECT account." : "Mock sign-in for your spatial social canvas."}</p>
+        <div className="mb-4 grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold">Display name</span>
+            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Your name" />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold">Username</span>
+            <input value={username} onChange={(event) => setUsername(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="username" />
+          </label>
+        </div>
+        <label className="mb-2 block text-sm font-semibold">Bio</label>
+        <textarea value={bio} onChange={(event) => setBio(event.target.value)} className="mb-4 min-h-20 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="A little about you" />
+        <div className="mb-4 grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold">Avatar URL</span>
+            <input value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Optional" />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold">Banner URL</span>
+            <input value={bannerUrl} onChange={(event) => setBannerUrl(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Optional" />
+          </label>
+        </div>
         <label className="mb-2 block text-sm font-semibold">Email</label>
         <input value={email} onChange={(event) => setEmail(event.target.value)} className="mb-4 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
         <label className="mb-2 block text-sm font-semibold">Password</label>
@@ -59,8 +101,10 @@ function AuthGate() {
 function FilterBar({ mobile = false, onClose }: { mobile?: boolean; onClose?: () => void }) {
   const search = useAppStore((state) => state.search);
   const sortMode = useAppStore((state) => state.sortMode);
+  const feedStyle = useAppStore((state) => state.feedStyle);
   const setSearch = useAppStore((state) => state.setSearch);
   const setSortMode = useAppStore((state) => state.setSortMode);
+  const setFeedStyle = useAppStore((state) => state.setFeedStyle);
 
   return (
     <div className={mobile ? "space-y-4" : "hidden items-center gap-3 lg:flex"}>
@@ -79,6 +123,15 @@ function FilterBar({ mobile = false, onClose }: { mobile?: boolean; onClose?: ()
         className="h-11 w-full rounded-2xl border border-slate-200 bg-white/90 px-3 text-sm font-medium outline-none focus:border-teal-500 dark:border-white/10 dark:bg-slate-950/90 lg:w-48"
       >
         {sortOptions.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+      <select
+        value={feedStyle}
+        onChange={(event) => setFeedStyle(event.target.value as FeedStyle)}
+        className="h-11 w-full rounded-2xl border border-slate-200 bg-white/90 px-3 text-sm font-medium outline-none focus:border-teal-500 dark:border-white/10 dark:bg-slate-950/90 lg:w-44"
+      >
+        {feedStyles.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>
         ))}
       </select>
@@ -104,6 +157,7 @@ export default function App() {
     activePostId,
     activeProfileId,
     sortMode,
+    feedStyle,
     search,
     canvasView,
     theme,
@@ -115,6 +169,7 @@ export default function App() {
     repostPost,
     bookmarkPost,
     addComment,
+    signOut,
     toggleTheme
   } = useAppStore();
   const initialize = useAppStore((state) => state.initialize);
@@ -151,7 +206,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f7f7f4] text-slate-950 dark:bg-[#0e1116] dark:text-white">
-      <Sidebar currentUser={currentUser} onCreate={() => setComposerOpen(true)} onProfile={() => setActiveProfile(currentUser.id)} />
+      <Sidebar currentUser={currentUser} onCreate={() => setComposerOpen(true)} onProfile={() => setActiveProfile(currentUser.id)} onSignOut={() => void signOut()} />
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 lg:left-72">
           <FilterBar />
@@ -171,6 +226,7 @@ export default function App() {
           posts={filteredPosts}
           users={users}
           sortMode={sortMode}
+          feedStyle={feedStyle}
           search={search}
           view={canvasView}
           onViewChange={setCanvasView}
