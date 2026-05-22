@@ -11,7 +11,7 @@ export type SortMode =
   | "photos-only"
   | "videos-only";
 
-export type FeedStyle = "classic" | "signal" | "gallery" | "orbit";
+export type FeedStyle = "classic" | "signal" | "gallery" | "orbit" | "mosaic";
 
 export type User = {
   id: string;

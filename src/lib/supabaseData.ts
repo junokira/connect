@@ -226,7 +226,8 @@ export async function reactToPostReal(postId: string, userId: string, type: "lik
   if (error?.message.includes("duplicate key")) return undefined;
   if (error) throw error;
   const counter = type === "like" ? "likes_count" : type === "repost" ? "reposts_count" : "bookmarks_count";
-  await client.rpc("increment_post_counter", { target_post_id: postId, counter_name: counter });
+  const { error: counterError } = await client.rpc("increment_post_counter", { target_post_id: postId, counter_name: counter });
+  if (counterError) throw counterError;
   return toReaction(data as ReactionRow);
 }
 
@@ -238,7 +239,8 @@ export async function addCommentReal(comment: Comment) {
     .select("*")
     .single();
   if (error) throw error;
-  await client.rpc("increment_post_counter", { target_post_id: comment.postId, counter_name: "comments_count" });
+  const { error: counterError } = await client.rpc("increment_post_counter", { target_post_id: comment.postId, counter_name: "comments_count" });
+  if (counterError) throw counterError;
   return toComment(data as CommentRow);
 }
 

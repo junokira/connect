@@ -161,17 +161,75 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  actor_id uuid;
 begin
+  actor_id := auth.uid();
+  if actor_id is null then
+    raise exception 'Authentication required';
+  end if;
+
   if counter_name = 'likes_count' then
+    if not exists (
+      select 1 from public.post_reactions
+      where post_id = target_post_id and user_id = actor_id and type = 'like'
+    ) then
+      raise exception 'A like reaction is required before incrementing likes_count';
+    end if;
     update public.posts set likes_count = likes_count + 1 where id = target_post_id;
   elsif counter_name = 'comments_count' then
+    if not exists (
+      select 1 from public.comments
+      where post_id = target_post_id and author_id = actor_id
+    ) then
+      raise exception 'A comment is required before incrementing comments_count';
+    end if;
     update public.posts set comments_count = comments_count + 1 where id = target_post_id;
   elsif counter_name = 'reposts_count' then
+    if not exists (
+      select 1 from public.post_reactions
+      where post_id = target_post_id and user_id = actor_id and type = 'repost'
+    ) then
+      raise exception 'A repost reaction is required before incrementing reposts_count';
+    end if;
     update public.posts set reposts_count = reposts_count + 1 where id = target_post_id;
   elsif counter_name = 'bookmarks_count' then
+    if not exists (
+      select 1 from public.post_reactions
+      where post_id = target_post_id and user_id = actor_id and type = 'bookmark'
+    ) then
+      raise exception 'A bookmark reaction is required before incrementing bookmarks_count';
+    end if;
     update public.posts set bookmarks_count = bookmarks_count + 1 where id = target_post_id;
   else
     raise exception 'Unsupported counter %', counter_name;
   end if;
 end;
 $$;
+
+revoke execute on function public.increment_post_counter(uuid, text) from anon;
+grant execute on function public.increment_post_counter(uuid, text) to authenticated;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.profiles;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.posts;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.comments;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.post_reactions;
+exception when duplicate_object then null;
+end $$;

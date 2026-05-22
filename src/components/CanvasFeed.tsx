@@ -29,6 +29,14 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
     const lift = post.type === "text" ? 80 : 0;
     return { x: col * 380 - 760, y: row * 350 - 220 + lift };
   }
+  if (style === "mosaic") {
+    const columns = [-760, -380, 0, 380, 760];
+    const col = index % columns.length;
+    const row = Math.floor(index / columns.length);
+    const stagger = [0, 150, 70, 220, 110][col];
+    const mediaLift = post.type === "text" ? 90 : -20;
+    return { x: columns[col], y: row * 430 + stagger + mediaLift - 260 };
+  }
   if (style === "orbit") {
     const ring = Math.floor(index / 8) + 1;
     const inRing = index % 8;

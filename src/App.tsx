@@ -1,5 +1,5 @@
 import { Eye, LogIn, Moon, Search, SlidersHorizontal, Sun } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasControls } from "./components/CanvasControls";
 import { CanvasFeed } from "./components/CanvasFeed";
 import { Composer } from "./components/Composer";
@@ -7,6 +7,7 @@ import { MobileNav } from "./components/MobileNav";
 import { PostModal } from "./components/PostModal";
 import { ProfileView } from "./components/ProfileView";
 import { Sidebar } from "./components/Sidebar";
+import { supabase } from "./lib/supabase";
 import { useAppStore } from "./store/useAppStore";
 import { FeedStyle, SortMode } from "./types";
 import { getFilteredPosts } from "./utils/posts";
@@ -28,7 +29,8 @@ const feedStyles: { value: FeedStyle; label: string }[] = [
   { value: "classic", label: "Classic" },
   { value: "signal", label: "Signal Clusters" },
   { value: "gallery", label: "Gallery Flow" },
-  { value: "orbit", label: "Orbit" }
+  { value: "orbit", label: "Orbit" },
+  { value: "mosaic", label: "Mosaic Boards" }
 ];
 
 function AuthGate() {
@@ -173,10 +175,12 @@ export default function App() {
     toggleTheme
   } = useAppStore();
   const initialize = useAppStore((state) => state.initialize);
+  const refreshData = useAppStore((state) => state.refreshData);
 
   const [composerOpen, setComposerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
+  const refreshTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     void initialize();
@@ -185,6 +189,29 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
+
+  useEffect(() => {
+    if (!supabase || !authed) return undefined;
+    const client = supabase;
+    const scheduleRefresh = () => {
+      window.clearTimeout(refreshTimer.current);
+      refreshTimer.current = window.setTimeout(() => {
+        void refreshData().catch(() => undefined);
+      }, 350);
+    };
+    const channel = client
+      .channel("connect-feed")
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_reactions" }, scheduleRefresh)
+      .subscribe();
+
+    return () => {
+      window.clearTimeout(refreshTimer.current);
+      void client.removeChannel(channel);
+    };
+  }, [authed, refreshData]);
 
   const currentUser = users.find((user) => user.id === currentUserId) || users[0];
   const filteredPosts = useMemo(() => getFilteredPosts(posts, users, sortMode, search), [posts, search, sortMode, users]);

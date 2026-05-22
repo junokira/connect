@@ -9,7 +9,7 @@ CONNECT is an MVP social platform where the home feed is an infinite spatial can
 - TypeScript
 - Tailwind CSS
 - Zustand
-- Supabase Auth, Postgres, and Storage
+- Supabase Auth, Postgres, Storage, and Realtime
 
 ## Run
 
@@ -30,7 +30,7 @@ CONNECT requires Supabase environment variables for auth, profiles, posts, comme
 4. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 5. Restart `npm run dev`.
 
-For Vercel, add the same two environment variables in the Vercel project settings. CONNECT uses Supabase auth, profiles, posts, comments, likes, reposts, bookmarks, follows-ready tables, media storage, and persisted canvas coordinates.
+For Vercel, add the same two environment variables in the Vercel project settings. CONNECT uses Supabase auth, profiles, posts, comments, likes, reposts, bookmarks, follows-ready tables, media storage, realtime feed refreshes, and persisted canvas coordinates.
 
 Media uploads use the `connect-media` Supabase Storage bucket created by `supabase/schema.sql`.
 
@@ -41,7 +41,7 @@ Media uploads use the `connect-media` Supabase Storage bucket created by `supaba
 - Viewport culling for canvas posts.
 - Text, photo, and video composer with draft preview.
 - Sorting, media filters, post type filters, and search by keyword, username, hashtag, or type.
-- Feed style modes: Classic, Signal Clusters, Gallery Flow, and Orbit.
+- Feed style modes: Classic, Signal Clusters, Gallery Flow, Orbit, and Mosaic Boards.
 - Click or tap post cards to open detailed modal.
 - Like, comment, repost, bookmark, and share actions.
 - First-open onboarding creates a profile that is reflected in the profile view and used for new posts.
