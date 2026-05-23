@@ -57,7 +57,8 @@ select {
 }
 
 .canvas-layer {
-  contain: layout paint style;
+  contain: layout style;
+  overflow: visible;
   transform-origin: 0 0;
   will-change: transform;
 }
