@@ -70,7 +70,7 @@ const toUser = (row: ProfileRow): User => ({
   createdAt: row.created_at,
   followersCount: row.followers_count,
   followingCount: row.following_count,
-  verified: row.verified ?? true
+  verified: row.verified ?? false
 });
 
 const toPost = (row: PostRow): Post => ({
@@ -390,12 +390,31 @@ export async function loadConnectData() {
   if (reactionsError) throw reactionsError;
   if (followsError) throw followsError;
 
+  const mappedComments = (comments || []).map((row) => toComment(row as CommentRow));
+  const mappedReactions = (reactions || []).map((row) => toReaction(row as ReactionRow));
+  const mappedFollows = (follows || []).map((row) => toFollow(row as FollowRow));
+  const users = (profiles || []).map((row) => {
+    const user = toUser(row as ProfileRow);
+    return {
+      ...user,
+      followersCount: mappedFollows.filter((follow) => follow.followingId === user.id).length,
+      followingCount: mappedFollows.filter((follow) => follow.followerId === user.id).length
+    };
+  });
+  const countedPosts = ensureCanvasPositions((posts || []).map((row) => toPost(row as PostRow))).map((post) => ({
+    ...post,
+    likesCount: mappedReactions.filter((reaction) => reaction.postId === post.id && reaction.type === "like").length,
+    commentsCount: mappedComments.filter((comment) => comment.postId === post.id).length,
+    repostsCount: mappedReactions.filter((reaction) => reaction.postId === post.id && reaction.type === "repost").length,
+    bookmarksCount: mappedReactions.filter((reaction) => reaction.postId === post.id && reaction.type === "bookmark").length
+  }));
+
   return {
-    users: (profiles || []).map((row) => toUser(row as ProfileRow)),
-    posts: ensureCanvasPositions((posts || []).map((row) => toPost(row as PostRow))),
-    comments: (comments || []).map((row) => toComment(row as CommentRow)),
-    reactions: (reactions || []).map((row) => toReaction(row as ReactionRow)),
-    follows: (follows || []).map((row) => toFollow(row as FollowRow))
+    users,
+    posts: countedPosts,
+    comments: mappedComments,
+    reactions: mappedReactions,
+    follows: mappedFollows
   };
 }
 
@@ -437,15 +456,13 @@ export async function reactToPostReal(postId: string, userId: string, type: "lik
   if (existing) {
     const { error } = await client.from("post_reactions").delete().eq("post_id", postId).eq("user_id", userId).eq("type", type);
     if (error) throw error;
-    const { error: counterError } = await client.rpc("adjust_post_counter", { target_post_id: postId, counter_name: counter, amount: -1 });
-    if (counterError) throw counterError;
+    await client.rpc("adjust_post_counter", { target_post_id: postId, counter_name: counter, amount: -1 });
     return { reaction: toReaction(existing as ReactionRow), active: false };
   }
 
   const { data, error } = await client.from("post_reactions").insert({ post_id: postId, user_id: userId, type }).select("*").single();
   if (error) throw error;
-  const { error: counterError } = await client.rpc("adjust_post_counter", { target_post_id: postId, counter_name: counter, amount: 1 });
-  if (counterError) throw counterError;
+  await client.rpc("adjust_post_counter", { target_post_id: postId, counter_name: counter, amount: 1 });
   return { reaction: toReaction(data as ReactionRow), active: true };
 }
 
@@ -457,8 +474,7 @@ export async function addCommentReal(comment: Comment) {
     .select("*")
     .single();
   if (error) throw error;
-  const { error: counterError } = await client.rpc("increment_post_counter", { target_post_id: comment.postId, counter_name: "comments_count" });
-  if (counterError) throw counterError;
+  await client.rpc("increment_post_counter", { target_post_id: comment.postId, counter_name: "comments_count" });
   return toComment(data as CommentRow);
 }
 
@@ -470,14 +486,12 @@ export async function toggleFollowReal(followerId: string, followingId: string) 
   if (existing) {
     const { error } = await client.from("follows").delete().eq("follower_id", followerId).eq("following_id", followingId);
     if (error) throw error;
-    const { error: counterError } = await client.rpc("adjust_follow_counts", { target_follower_id: followerId, target_following_id: followingId, amount: -1 });
-    if (counterError) throw counterError;
+    await client.rpc("adjust_follow_counts", { target_follower_id: followerId, target_following_id: followingId, amount: -1 });
     return { follow: toFollow(existing as FollowRow), active: false };
   }
   const { data, error } = await client.from("follows").insert({ follower_id: followerId, following_id: followingId }).select("*").single();
   if (error) throw error;
-  const { error: counterError } = await client.rpc("adjust_follow_counts", { target_follower_id: followerId, target_following_id: followingId, amount: 1 });
-  if (counterError) throw counterError;
+  await client.rpc("adjust_follow_counts", { target_follower_id: followerId, target_following_id: followingId, amount: 1 });
   return { follow: toFollow(data as FollowRow), active: true };
 }
 

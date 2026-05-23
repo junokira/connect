@@ -14,7 +14,6 @@ type Props = {
   onViewChange: (view: CanvasView) => void;
   onOpenPost: (id: string) => void;
   onOpenProfile: (id: string) => void;
-  onLatest: () => void;
   onLikePost: (id: string) => void;
   onRepostPost: (id: string) => void;
   onBookmarkPost: (id: string) => void;
@@ -51,7 +50,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: typeOffset + column * 80 - 80, y: row * 330 - 220 };
 };
 
-export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLatest, onLikePost, onRepostPost, onBookmarkPost }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView } | null>(null);
   const didDragRef = useRef(false);
@@ -112,6 +111,12 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     [feedStyle, posts]
   );
 
+  const centerLatest = useCallback(() => {
+    const latest = [...positionedPosts].sort((a, b) => Date.parse(b.post.createdAt) - Date.parse(a.post.createdAt))[0];
+    if (!latest) return;
+    onViewChange({ x: -latest.position.x, y: -latest.position.y, zoom: 0.95 });
+  }, [onViewChange, positionedPosts]);
+
   const visiblePosts = useMemo(() => {
     const padding = 640;
     const centerX = size.width / 2;
@@ -125,9 +130,8 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
 
   useEffect(() => {
     if (!positionedPosts.length || visiblePosts.length) return;
-    const latest = [...positionedPosts].sort((a, b) => Date.parse(b.post.createdAt) - Date.parse(a.post.createdAt))[0];
-    onViewChange({ x: -latest.position.x, y: -latest.position.y, zoom: 0.95 });
-  }, [onViewChange, positionedPosts, visiblePosts.length]);
+    centerLatest();
+  }, [centerLatest, positionedPosts.length, visiblePosts.length]);
 
   const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest("button,input,select,textarea,a,video")) return;
@@ -180,7 +184,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
       <button
         onClick={(event) => {
           event.stopPropagation();
-          onLatest();
+          centerLatest();
         }}
         className="absolute left-4 top-4 z-20 flex h-11 items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-[#111113]/88"
         aria-label="Jump to latest posts"
@@ -192,7 +196,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
         <div className="absolute left-1/2 top-24 z-20 w-[min(90vw,360px)] -translate-x-1/2 rounded-3xl border border-amber-200 bg-white/92 p-4 text-center text-sm shadow-glass backdrop-blur-xl dark:border-amber-300/20 dark:bg-[#111113]/92">
           <p className="font-bold">Posts are loaded, but the canvas is off target.</p>
           <p className="mt-1 text-slate-500 dark:text-slate-400">{posts.length} posts are available. Use Latest to recenter.</p>
-          <button onClick={onLatest} className="mt-3 rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">Show posts</button>
+          <button onClick={centerLatest} className="mt-3 rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">Show posts</button>
         </div>
       ) : null}
       {!posts.length ? (

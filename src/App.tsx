@@ -178,7 +178,7 @@ function AuthGate() {
   );
 }
 
-function SearchBox({ compact = false }: { compact?: boolean }) {
+function SearchBox({ compact = false, onFocus }: { compact?: boolean; onFocus?: () => void }) {
   const search = useAppStore((state) => state.search);
   const setSearch = useAppStore((state) => state.setSearch);
 
@@ -187,6 +187,7 @@ function SearchBox({ compact = false }: { compact?: boolean }) {
       <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
       <input
         value={search}
+        onFocus={onFocus}
         onChange={(event) => setSearch(event.target.value)}
         className={`h-11 w-full rounded-2xl border border-slate-200 bg-white/90 pl-10 pr-4 text-sm outline-none focus:border-slate-950 dark:border-white/10 dark:bg-slate-950/90 dark:focus:border-white ${compact ? "lg:w-80" : ""}`}
         placeholder="Search CONNECT"
@@ -301,6 +302,14 @@ function SearchView({
   onRepostPost: (id: string) => void;
   onBookmarkPost: (id: string) => void;
 }) {
+  const search = useAppStore((state) => state.search);
+  const term = search.trim().toLowerCase();
+  const matchedUsers = term
+    ? users.filter((user) => [user.displayName, user.username, user.bio, user.location, user.website].join(" ").toLowerCase().includes(term)).slice(0, 8)
+    : [];
+  const hasSearch = Boolean(term);
+  const hasResults = posts.length > 0 || matchedUsers.length > 0;
+
   return (
     <main className="thin-scrollbar h-full overflow-y-auto px-4 pb-28 pt-20 lg:px-8">
       <div className="mx-auto max-w-5xl">
@@ -308,11 +317,31 @@ function SearchView({
           <h1 className="mb-3 text-3xl font-black">Search</h1>
           <SearchBox />
         </div>
+        {matchedUsers.length ? (
+          <section className="mb-8">
+            <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Profiles</h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {matchedUsers.map((user) => (
+                <button key={user.id} onClick={() => onOpenProfile(user.id)} className="flex min-w-0 items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-glass dark:border-white/10 dark:bg-[#111113]">
+                  <img className="h-12 w-12 rounded-full object-cover" src={user.avatarUrl} alt="" />
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1 truncate text-sm font-bold">
+                      <span className="truncate">{user.displayName}</span>
+                      <VerifiedBadge verified={user.verified} size={14} />
+                    </span>
+                    <span className="block truncate text-xs text-slate-500">@{user.username}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {posts.length ? <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Posts</h2> : null}
         <div className="grid justify-items-center gap-4 md:grid-cols-2 xl:grid-cols-3">
           {posts.map((post) => (
             <PostCard key={post.id} post={post} author={users.find((user) => user.id === post.authorId) || users[0]} {...reactionState(post.id)} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(post.authorId)} onLike={() => onLikePost(post.id)} onComment={() => onOpenPost(post.id)} onRepost={() => onRepostPost(post.id)} onBookmark={() => onBookmarkPost(post.id)} />
           ))}
-          {!posts.length ? <p className="rounded-3xl border border-dashed border-slate-300 p-8 text-sm text-slate-500 dark:border-white/15">Search posts, captions, usernames, hashtags, and media types.</p> : null}
+          {!hasResults ? <p className="rounded-3xl border border-dashed border-slate-300 p-8 text-sm text-slate-500 dark:border-white/15">{hasSearch ? "No posts or profiles match that search yet." : "Search posts, captions, usernames, display names, hashtags, and media types."}</p> : null}
         </div>
       </div>
     </main>
@@ -488,6 +517,7 @@ export default function App() {
 
   const currentUser = users.find((user) => user.id === currentUserId) || users[0];
   const filteredPosts = useMemo(() => getFilteredPosts(posts, users, sortMode, search), [posts, search, sortMode, users]);
+  const searchPosts = useMemo(() => getFilteredPosts(posts, users, "newest", search), [posts, search, users]);
   const sortedCanvasPosts = useMemo(() => getFilteredPosts(posts, users, sortMode, ""), [posts, sortMode, users]);
   const canvasPosts = sortedCanvasPosts.length || !posts.length ? sortedCanvasPosts : posts;
   const activePost = posts.find((post) => post.id === activePostId);
@@ -540,7 +570,7 @@ export default function App() {
       ) : null}
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className={`fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 ${chromeHidden ? "" : "lg:left-72"}`}>
-          {!chromeHidden ? <div className="hidden lg:block"><SearchBox compact /></div> : null}
+          {!chromeHidden ? <div className="hidden lg:block"><SearchBox compact onFocus={() => setActiveView("search")} /></div> : null}
           {!chromeHidden && error ? <span className="hidden max-w-72 truncate rounded-2xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200 lg:block">{error}</span> : null}
           {!chromeHidden ? <button onClick={() => setAdjustOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Adjust canvas">
             <SlidersHorizontal size={18} />
@@ -564,7 +594,6 @@ export default function App() {
             onViewChange={setCanvasView}
             onOpenPost={setActivePost}
             onOpenProfile={setActiveProfile}
-            onLatest={() => focusPost(latest, 0.95)}
             onLikePost={(id) => void likePost(id)}
             onRepostPost={(id) => void repostPost(id)}
             onBookmarkPost={(id) => void bookmarkPost(id)}
@@ -572,7 +601,7 @@ export default function App() {
         ) : activeView === "explore" ? (
           <ExploreView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         ) : (
-          <SearchView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
+          <SearchView posts={searchPosts} users={users} reactionState={reactionState} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         )}
       </div>
 
@@ -621,6 +650,7 @@ export default function App() {
         onRepost={() => activePost && repostPost(activePost.id)}
         onBookmark={() => activePost && bookmarkPost(activePost.id)}
         onComment={(content) => activePost && addComment(activePost.id, content)}
+        onOpenProfile={(id) => setActiveProfile(id)}
       />
       <ProfileView
         user={activeProfile}
@@ -630,6 +660,7 @@ export default function App() {
         reactions={reactions}
         follows={follows}
         onClose={() => setActiveProfile(undefined)}
+        onOpenProfile={setActiveProfile}
         onOpenPost={setActivePost}
         onLikePost={(id) => void likePost(id)}
         onRepostPost={(id) => void repostPost(id)}

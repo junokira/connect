@@ -1,5 +1,5 @@
 import { CalendarDays, ImagePlus, Link as LinkIcon, Loader2, MapPin, Pencil, Upload, X } from "lucide-react";
-import { FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, MouseEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Follow, Post, PostReaction, ProfileUpdate, User } from "../types";
 import { normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
@@ -14,6 +14,7 @@ type Props = {
   reactions: PostReaction[];
   follows: Follow[];
   onClose: () => void;
+  onOpenProfile: (id: string) => void;
   onOpenPost: (id: string) => void;
   onLikePost: (id: string) => void;
   onRepostPost: (id: string) => void;
@@ -153,14 +154,6 @@ function EditProfileDialog({ user, onClose, onSave, onUpdatePassword }: { user: 
             <input value={form.username} onChange={(event) => update("username", event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
           </label>
           <label>
-            <span className="mb-2 block text-sm font-semibold">Avatar URL</span>
-            <input value={form.avatarUrl} onChange={(event) => update("avatarUrl", event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
-          </label>
-          <label>
-            <span className="mb-2 block text-sm font-semibold">Banner URL</span>
-            <input value={form.bannerUrl} onChange={(event) => update("bannerUrl", event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
-          </label>
-          <label>
             <span className="mb-2 block text-sm font-semibold">Location</span>
             <input value={form.location} onChange={(event) => update("location", event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
           </label>
@@ -211,10 +204,11 @@ function FullscreenMedia({ src, label, onClose }: { src: string; label: string; 
   );
 }
 
-export function ProfileView({ user, currentUserId, users, posts, reactions, follows, onClose, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword }: Props) {
+export function ProfileView({ user, currentUserId, users, posts, reactions, follows, onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword }: Props) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Posts");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string } | undefined>();
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -247,9 +241,22 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
   });
   const visiblePosts = activeTab === "Media" ? profileData.mediaPosts : activeTab === "Likes" ? profileData.likedPosts : profileData.userPosts;
   const websiteUrl = user.website ? normalizeExternalUrl(user.website) : "";
+  const touchStart = (event: TouchEvent) => {
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+  const touchEnd = (event: TouchEvent) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = Math.abs(touch.clientY - start.y);
+    if (deltaX > 100 && deltaX > deltaY * 1.5) onClose();
+  };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white">
+    <div onTouchStart={touchStart} onTouchEnd={touchEnd} className="fixed inset-0 z-50 overflow-y-auto bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
         <div>
           <p className="flex items-center gap-1 font-bold">
@@ -313,7 +320,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
               emphasized
               {...reactionState(profileData.pinned.id)}
               onOpen={() => onOpenPost(profileData.pinned?.id || "")}
-              onProfile={() => undefined}
+              onProfile={() => onOpenProfile(user.id)}
               onLike={() => onLikePost(profileData.pinned?.id || "")}
               onComment={() => onOpenPost(profileData.pinned?.id || "")}
               onRepost={() => onRepostPost(profileData.pinned?.id || "")}
@@ -334,7 +341,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
                     author={users.find((candidate) => candidate.id === post.authorId) || user}
                     {...reactionState(post.id)}
                     onOpen={() => onOpenPost(post.id)}
-                    onProfile={() => undefined}
+                    onProfile={() => onOpenProfile(post.authorId)}
                     onLike={() => onLikePost(post.id)}
                     onComment={() => onOpenPost(post.id)}
                     onRepost={() => onRepostPost(post.id)}
@@ -357,7 +364,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
             <h2 className="mb-3 mt-6 text-sm font-bold uppercase text-slate-400">People</h2>
             <div className="space-y-3">
               {users.filter((candidate) => candidate.id !== user.id).slice(0, 4).map((candidate) => (
-                <div key={candidate.id} className="flex items-center gap-3 rounded-2xl bg-slate-100 p-3 dark:bg-white/10">
+                <button key={candidate.id} onClick={() => onOpenProfile(candidate.id)} className="flex w-full items-center gap-3 rounded-2xl bg-slate-100 p-3 text-left transition hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15">
                   <img className="h-10 w-10 rounded-full object-cover" src={candidate.avatarUrl} alt="" />
                   <div>
                     <p className="flex items-center gap-1 text-sm font-semibold">
@@ -366,7 +373,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
                     </p>
                     <p className="text-xs text-slate-500">@{candidate.username}</p>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </aside>
