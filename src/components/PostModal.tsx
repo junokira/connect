@@ -77,7 +77,7 @@ export function PostModal({ post, author, currentUser, comments, users, onClose,
 
   return (
     <div onMouseDown={onClose} className="fixed inset-0 z-[65] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <section onMouseDown={stop} onTouchStart={touchStart} onTouchEnd={touchEnd} className="thin-scrollbar flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-950 sm:rounded-3xl">
+      <section onMouseDown={stop} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter thin-scrollbar flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-950 sm:rounded-3xl">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
           <button type="button" onClick={() => openProfile(author.id)} className="flex min-w-0 items-center gap-3 rounded-2xl text-left">
             <img className="h-11 w-11 rounded-full object-cover" src={author.avatarUrl} alt="" />

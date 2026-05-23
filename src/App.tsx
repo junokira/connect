@@ -1,4 +1,4 @@
-import { Apple, Eye, EyeOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, X } from "lucide-react";
+import { Apple, Bell, Eye, EyeOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasFeed } from "./components/CanvasFeed";
 import { Composer } from "./components/Composer";
@@ -10,7 +10,8 @@ import { Sidebar } from "./components/Sidebar";
 import { VerifiedBadge } from "./components/VerifiedBadge";
 import { supabase } from "./lib/supabase";
 import { useAppStore } from "./store/useAppStore";
-import { FeedStyle, SortMode } from "./types";
+import { FeedScope, FeedStyle, SortMode } from "./types";
+import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y } from "./utils/canvasLayout";
 import { getFilteredPosts } from "./utils/posts";
 
 const sortOptions: { value: SortMode; label: string }[] = [
@@ -32,6 +33,15 @@ const feedStyles: { value: FeedStyle; label: string }[] = [
   { value: "gallery", label: "Gallery Flow" },
   { value: "orbit", label: "Orbit" },
   { value: "mosaic", label: "Mosaic Boards" }
+];
+
+const feedScopes: { value: FeedScope; label: string }[] = [
+  { value: "everyone", label: "Everyone" },
+  { value: "following", label: "Following" },
+  { value: "liked", label: "Liked posts" },
+  { value: "liked-media", label: "Liked media" },
+  { value: "liked-photos", label: "Liked photos" },
+  { value: "liked-videos", label: "Liked videos" }
 ];
 
 function AuthGate() {
@@ -205,6 +215,8 @@ function AdjustPanel({
   onReset,
   onLatest,
   onHide,
+  feedScope,
+  onFeedScopeChange,
   theme,
   onToggleTheme
 }: {
@@ -216,6 +228,8 @@ function AdjustPanel({
   onReset: () => void;
   onLatest: () => void;
   onHide: () => void;
+  feedScope: FeedScope;
+  onFeedScopeChange: (scope: FeedScope) => void;
   theme: "light" | "dark";
   onToggleTheme: () => void;
 }) {
@@ -248,6 +262,12 @@ function AdjustPanel({
           </button>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
+          <label>
+            <span className="mb-2 block text-sm font-semibold">Canvas feed</span>
+            <select value={feedScope} onChange={(event) => onFeedScopeChange(event.target.value as FeedScope)} className="h-12 w-full rounded-2xl border border-slate-200 bg-transparent px-3 text-sm font-medium outline-none dark:border-white/10">
+              {feedScopes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
           <label>
             <span className="mb-2 block text-sm font-semibold">Feed style</span>
             <select value={feedStyle} onChange={(event) => setFeedStyle(event.target.value as FeedStyle)} className="h-12 w-full rounded-2xl border border-slate-200 bg-transparent px-3 text-sm font-medium outline-none dark:border-white/10">
@@ -432,6 +452,63 @@ function ExploreView({
   );
 }
 
+function ActivityView({
+  posts,
+  users,
+  reactions,
+  comments,
+  onOpenPost,
+  onOpenProfile
+}: {
+  posts: ReturnType<typeof getFilteredPosts>;
+  users: ReturnType<typeof useAppStore.getState>["users"];
+  reactions: ReturnType<typeof useAppStore.getState>["reactions"];
+  comments: ReturnType<typeof useAppStore.getState>["comments"];
+  onOpenPost: (id: string) => void;
+  onOpenProfile: (id: string) => void;
+}) {
+  const events = [
+    ...comments.map((comment) => ({ id: `comment-${comment.id}`, type: "comment", postId: comment.postId, userId: comment.authorId, createdAt: comment.createdAt })),
+    ...reactions.map((reaction) => ({ id: `${reaction.type}-${reaction.postId}-${reaction.userId}`, type: reaction.type, postId: reaction.postId, userId: reaction.userId, createdAt: reaction.createdAt }))
+  ]
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 40);
+
+  return (
+    <main className="thin-scrollbar h-full overflow-y-auto px-4 pb-28 pt-20 lg:px-8">
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-6">
+          <h1 className="flex items-center gap-2 text-3xl font-black"><Bell size={26} /> Activity</h1>
+          <p className="text-sm text-slate-500">Recent social movement across your CONNECT graph.</p>
+        </div>
+        <div className="space-y-3">
+          {events.map((event) => {
+            const user = users.find((candidate) => candidate.id === event.userId);
+            const post = posts.find((candidate) => candidate.id === event.postId);
+            if (!user || !post) return null;
+            return (
+              <button key={event.id} onClick={() => onOpenPost(post.id)} className="flex w-full items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-glass dark:border-white/10 dark:bg-[#111113]">
+                <img onClick={(click) => { click.stopPropagation(); onOpenProfile(user.id); }} className="h-12 w-12 rounded-full object-cover" src={user.avatarUrl} alt="" />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1 text-sm font-bold">
+                    <span className="truncate">{user.displayName}</span>
+                    <VerifiedBadge verified={user.verified} size={14} />
+                    <span className="font-medium text-slate-500">@{user.username}</span>
+                  </span>
+                  <span className="mt-1 block truncate text-sm text-slate-600 dark:text-slate-300">
+                    {event.type === "comment" ? "commented on" : event.type === "like" ? "liked" : event.type === "repost" ? "reposted" : "bookmarked"} {post.type === "text" ? post.content : post.caption}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+          {!events.length ? <p className="rounded-3xl border border-dashed border-slate-300 p-8 text-sm text-slate-500 dark:border-white/15">No activity yet.</p> : null}
+        </div>
+      </div>
+    </main>
+  );
+}
+
 export default function App() {
   const {
     users,
@@ -471,7 +548,8 @@ export default function App() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
-  const [activeView, setActiveView] = useState<"canvas" | "explore" | "search">("canvas");
+  const [activeView, setActiveView] = useState<"canvas" | "explore" | "search" | "activity">("canvas");
+  const [feedScope, setFeedScope] = useState<FeedScope>("everyone");
   const refreshTimer = useRef<number | undefined>(undefined);
   const focusedInitialCluster = useRef(false);
 
@@ -519,8 +597,18 @@ export default function App() {
   const currentUser = users.find((user) => user.id === currentUserId) || users[0];
   const filteredPosts = useMemo(() => getFilteredPosts(posts, users, sortMode, search), [posts, search, sortMode, users]);
   const searchPosts = useMemo(() => getFilteredPosts(posts, users, "newest", search), [posts, search, users]);
-  const sortedCanvasPosts = useMemo(() => getFilteredPosts(posts, users, sortMode, ""), [posts, sortMode, users]);
-  const canvasPosts = sortedCanvasPosts.length || !posts.length ? sortedCanvasPosts : posts;
+  const scopedPosts = useMemo(() => {
+    const followingIds = new Set(follows.filter((follow) => follow.followerId === currentUserId).map((follow) => follow.followingId));
+    const likedIds = new Set(reactions.filter((reaction) => reaction.userId === currentUserId && reaction.type === "like").map((reaction) => reaction.postId));
+    if (feedScope === "following") return posts.filter((post) => followingIds.has(post.authorId) || post.authorId === currentUserId);
+    if (feedScope === "liked") return posts.filter((post) => likedIds.has(post.id));
+    if (feedScope === "liked-media") return posts.filter((post) => likedIds.has(post.id) && post.type !== "text");
+    if (feedScope === "liked-photos") return posts.filter((post) => likedIds.has(post.id) && post.type === "photo");
+    if (feedScope === "liked-videos") return posts.filter((post) => likedIds.has(post.id) && post.type === "video");
+    return posts;
+  }, [currentUserId, feedScope, follows, posts, reactions]);
+  const sortedCanvasPosts = useMemo(() => getFilteredPosts(scopedPosts, users, sortMode, ""), [scopedPosts, sortMode, users]);
+  const canvasPosts = sortedCanvasPosts;
   const activePost = posts.find((post) => post.id === activePostId);
   const activeAuthor = activePost ? users.find((user) => user.id === activePost.authorId) : undefined;
   const activeProfile = users.find((user) => user.id === activeProfileId);
@@ -533,7 +621,7 @@ export default function App() {
   const zoomBy = (amount: number) => setCanvasView({ ...canvasView, zoom: Math.max(0.35, Math.min(2.2, canvasView.zoom + amount)) });
   const focusPost = useCallback((post = latest, zoom = 0.95) => {
     if (!post) return;
-    setCanvasView({ x: -(post.x + 160), y: -(post.y + 210), zoom });
+    setCanvasView({ x: -(post.x + CANVAS_CARD_CENTER_X), y: -(post.y + CANVAS_CARD_CENTER_Y), zoom });
   }, [latest, setCanvasView]);
 
   useEffect(() => {
@@ -563,7 +651,7 @@ export default function App() {
             focusPost(latest, 0.95);
           }}
           onExplore={() => setActiveView("explore")}
-          onSearch={() => setActiveView("search")}
+          onActivity={() => setActiveView("activity")}
           onCreate={() => setComposerOpen(true)}
           onProfile={() => setActiveProfile(currentUser.id)}
           onSignOut={() => void signOut()}
@@ -573,6 +661,9 @@ export default function App() {
         <header className={`fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 ${chromeHidden ? "" : "lg:left-72"}`}>
           {!chromeHidden ? <div className="hidden lg:block"><SearchBox compact onFocus={() => setActiveView("search")} /></div> : null}
           {!chromeHidden && error ? <span className="hidden max-w-72 truncate rounded-2xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200 lg:block">{error}</span> : null}
+          {!chromeHidden ? <button onClick={() => setActiveView("search")} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Search current canvas">
+            <Search size={18} />
+          </button> : null}
           {!chromeHidden ? <button onClick={() => setAdjustOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Adjust canvas">
             <SlidersHorizontal size={18} />
           </button> : null}
@@ -601,6 +692,8 @@ export default function App() {
           />
         ) : activeView === "explore" ? (
           <ExploreView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
+        ) : activeView === "activity" ? (
+          <ActivityView posts={posts} users={users} reactions={reactions} comments={comments} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} />
         ) : (
           <SearchView posts={searchPosts} users={users} reactionState={reactionState} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         )}
@@ -615,7 +708,7 @@ export default function App() {
           }}
           onExplore={() => setActiveView("explore")}
           onCreate={() => setComposerOpen(true)}
-          onSearch={() => setActiveView("search")}
+          onActivity={() => setActiveView("activity")}
           onProfile={() => setActiveProfile(currentUser.id)}
         />
       ) : null}
@@ -632,6 +725,8 @@ export default function App() {
           setChromeHidden(true);
           setAdjustOpen(false);
         }}
+        feedScope={feedScope}
+        onFeedScopeChange={setFeedScope}
         theme={theme}
         onToggleTheme={toggleTheme}
       />

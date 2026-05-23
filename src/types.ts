@@ -12,6 +12,7 @@ export type SortMode =
   | "videos-only";
 
 export type FeedStyle = "classic" | "signal" | "gallery" | "orbit" | "mosaic";
+export type FeedScope = "everyone" | "following" | "liked" | "liked-media" | "liked-photos" | "liked-videos";
 
 export type User = {
   id: string;

@@ -1,6 +1,7 @@
 import { LocateFixed } from "lucide-react";
 import { PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CanvasView, FeedStyle, Post, PostReaction, SortMode, User } from "../types";
+import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y, CANVAS_CARD_HEIGHT, CANVAS_CARD_WIDTH, resolveCanvasCollisions } from "../utils/canvasLayout";
 import { PostCard } from "./PostCard";
 
 type Props = {
@@ -17,14 +18,10 @@ type Props = {
   onLikePost: (id: string) => void;
   onRepostPost: (id: string) => void;
   onBookmarkPost: (id: string) => void;
+  className?: string;
 };
 
 const clampZoom = (zoom: number) => Math.max(0.35, Math.min(2.2, zoom));
-const CARD_WIDTH = 320;
-const CARD_HEIGHT = 360;
-const CARD_CENTER_Y = 210;
-const COLLISION_X = 360;
-const COLLISION_Y = 420;
 
 const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   if (style === "classic") return { x: post.x, y: post.y };
@@ -55,29 +52,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: typeOffset + column * 80 - 80, y: row * 330 - 220 };
 };
 
-const separatePositions = (items: { post: Post; position: { x: number; y: number } }[]) => {
-  const occupied: { x: number; y: number }[] = [];
-  return items.map((item) => {
-    let position = { ...item.position };
-    let attempts = 0;
-    while (
-      attempts < 140 &&
-      occupied.some((other) => Math.abs(other.x - position.x) < COLLISION_X && Math.abs(other.y - position.y) < COLLISION_Y)
-    ) {
-      attempts += 1;
-      const ring = Math.ceil(attempts / 10);
-      const angle = attempts * 2.399963;
-      position = {
-        x: item.position.x + Math.round(Math.cos(angle) * ring * 72),
-        y: item.position.y + Math.round(Math.sin(angle) * ring * 86)
-      };
-    }
-    occupied.push(position);
-    return { ...item, position };
-  });
-};
-
-export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, className = "h-screen" }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
   const didDragRef = useRef(false);
@@ -150,14 +125,14 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   }, [scheduleView, updateSize]);
 
   const positionedPosts = useMemo(
-    () => separatePositions(posts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) }))),
+    () => resolveCanvasCollisions(posts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) }))),
     [feedStyle, posts]
   );
 
   const centerLatest = useCallback(() => {
     const latest = [...positionedPosts].sort((a, b) => Date.parse(b.post.createdAt) - Date.parse(a.post.createdAt))[0];
     if (!latest) return;
-    onViewChange({ x: -(latest.position.x + CARD_WIDTH / 2), y: -(latest.position.y + CARD_CENTER_Y), zoom: 0.95 });
+    onViewChange({ x: -(latest.position.x + CANVAS_CARD_CENTER_X), y: -(latest.position.y + CANVAS_CARD_CENTER_Y), zoom: 0.95 });
   }, [onViewChange, positionedPosts]);
 
   const visiblePosts = useMemo(() => {
@@ -168,7 +143,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     const minY = (-centerY - view.y - padding) / view.zoom;
     const maxX = (size.width - centerX - view.x + padding) / view.zoom;
     const maxY = (size.height - centerY - view.y + padding) / view.zoom;
-    return positionedPosts.filter(({ position }) => position.x + CARD_WIDTH > minX && position.x < maxX && position.y + CARD_HEIGHT > minY && position.y < maxY);
+    return positionedPosts.filter(({ position }) => position.x + CANVAS_CARD_WIDTH > minX && position.x < maxX && position.y + CANVAS_CARD_HEIGHT > minY && position.y < maxY);
   }, [positionedPosts, size.height, size.width, view]);
 
   useEffect(() => {
@@ -227,7 +202,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   return (
     <main
       ref={viewportRef}
-      className="canvas-viewport relative h-screen flex-1 cursor-grab overflow-hidden bg-[#f5f5f7] text-slate-950 active:cursor-grabbing dark:bg-[#050505] dark:text-white"
+      className={`canvas-viewport relative flex-1 cursor-grab overflow-hidden bg-[#f5f5f7] text-slate-950 active:cursor-grabbing dark:bg-[#050505] dark:text-white ${className}`}
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
       onPointerUp={pointerUp}

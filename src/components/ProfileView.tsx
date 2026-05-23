@@ -1,8 +1,9 @@
 import { CalendarDays, ImagePlus, Link as LinkIcon, Loader2, MapPin, Pencil, Upload, X } from "lucide-react";
 import { FormEvent, MouseEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Follow, Post, PostReaction, ProfileUpdate, User } from "../types";
+import { CanvasView, Follow, Post, PostReaction, ProfileUpdate, User } from "../types";
 import { normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
+import { CanvasFeed } from "./CanvasFeed";
 import { PostCard } from "./PostCard";
 import { VerifiedBadge } from "./VerifiedBadge";
 
@@ -236,7 +237,10 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Posts");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
+  const [networkList, setNetworkList] = useState<"followers" | "following" | undefined>();
+  const [profileCanvasView, setProfileCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.92 });
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -245,6 +249,11 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
+
+  useEffect(() => {
+    scrollerRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    setActiveTab("Posts");
+  }, [user?.id]);
 
   const profileData = useMemo(() => {
     if (!user) return { userPosts: [], mediaPosts: [], likedPosts: [], pinned: undefined };
@@ -284,7 +293,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
   };
 
   return (
-    <div onTouchStart={touchStart} onTouchEnd={touchEnd} className="fixed inset-0 z-50 overflow-y-auto bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white">
+    <div ref={scrollerRef} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter fixed inset-0 z-50 overflow-y-auto bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
         <div>
           <p className="flex items-center gap-1 font-bold">
@@ -326,10 +335,12 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
               {websiteUrl ? <a className="flex items-center gap-1 hover:text-slate-950 hover:underline dark:hover:text-white" href={websiteUrl} target="_blank" rel="noreferrer"><LinkIcon size={16} /> {user.website}</a> : null}
               <span className="flex items-center gap-1"><CalendarDays size={16} /> Joined {formatDate(user.createdAt)}</span>
             </div>
-            <div className="mt-3 flex gap-5 text-sm">
-              <span><b>{formatCount(user.followingCount)}</b> Following</span>
-              <span><b>{formatCount(user.followersCount)}</b> Followers</span>
-            </div>
+            {isOwnProfile ? (
+              <div className="mt-3 flex gap-5 text-sm">
+                <button onClick={() => setNetworkList("following")} className="hover:underline"><b>{formatCount(user.followingCount)}</b> Following</button>
+                <button onClick={() => setNetworkList("followers")} className="hover:underline"><b>{formatCount(user.followersCount)}</b> Followers</button>
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -360,6 +371,24 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
         <section className="grid gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div>
             <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">{activeTab === "Media" ? "Media" : activeTab === "Likes" ? "Liked posts" : "Status feed"}</h2>
+            <div className="mb-6 overflow-hidden rounded-3xl border border-slate-200 shadow-glass dark:border-white/10">
+              <CanvasFeed
+                posts={visiblePosts}
+                users={users}
+                reactions={reactions}
+                currentUserId={currentUserId}
+                sortMode="newest"
+                feedStyle="classic"
+                view={profileCanvasView}
+                onViewChange={setProfileCanvasView}
+                onOpenPost={onOpenPost}
+                onOpenProfile={onOpenProfile}
+                onLikePost={onLikePost}
+                onRepostPost={onRepostPost}
+                onBookmarkPost={onBookmarkPost}
+                className="h-[72vh] min-h-[520px]"
+              />
+            </div>
             <div className="mx-auto grid max-w-[700px] justify-items-center gap-4 sm:grid-cols-2">
               {visiblePosts.map((post) => (
                 <div key={post.id} className="space-y-2">
@@ -409,6 +438,31 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
       </div>
       {editing ? <EditProfileDialog user={user} onClose={() => setEditing(false)} onSave={onUpdateProfile} onUpdatePassword={onUpdatePassword} onRequestVerification={onRequestVerification} /> : null}
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
+      {networkList ? (
+        <div onMouseDown={() => setNetworkList(undefined)} className="fixed inset-0 z-[75] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+          <section onMouseDown={(event) => event.stopPropagation()} className="modal-enter thin-scrollbar max-h-[80dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-lg font-black">{networkList === "followers" ? "Followers" : "Following"}</p>
+              <button onClick={() => setNetworkList(undefined)} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close network list"><X size={19} /></button>
+            </div>
+            <div className="space-y-2">
+              {users
+                .filter((candidate) => networkList === "followers"
+                  ? follows.some((follow) => follow.followingId === user.id && follow.followerId === candidate.id)
+                  : follows.some((follow) => follow.followerId === user.id && follow.followingId === candidate.id))
+                .map((candidate) => (
+                  <button key={candidate.id} onClick={() => { setNetworkList(undefined); onOpenProfile(candidate.id); }} className="flex w-full items-center gap-3 rounded-2xl p-3 text-left hover:bg-slate-100 dark:hover:bg-white/10">
+                    <img className="h-11 w-11 rounded-full object-cover" src={candidate.avatarUrl} alt="" />
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-1 truncate text-sm font-bold">{candidate.displayName}<VerifiedBadge verified={candidate.verified} size={14} /></span>
+                      <span className="block truncate text-xs text-slate-500">@{candidate.username}</span>
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

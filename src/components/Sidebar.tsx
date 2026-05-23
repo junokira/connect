@@ -1,27 +1,27 @@
-import { Compass, Home, PlusSquare, Search, UserRound } from "lucide-react";
+import { Bell, Compass, Home, PlusSquare, UserRound } from "lucide-react";
 import { User } from "../types";
 import { VerifiedBadge } from "./VerifiedBadge";
 
 const nav = [
   ["Home", Home],
   ["Explore", Compass],
-  ["Search", Search],
+  ["Activity", Bell],
   ["Create", PlusSquare],
   ["Profile", UserRound]
 ] as const;
 
 type Props = {
   currentUser: User;
-  activeView: "canvas" | "explore" | "search";
+  activeView: "canvas" | "explore" | "search" | "activity";
   onHome: () => void;
   onExplore: () => void;
-  onSearch: () => void;
+  onActivity: () => void;
   onCreate: () => void;
   onProfile: () => void;
   onSignOut: () => void;
 };
 
-export function Sidebar({ currentUser, activeView, onHome, onExplore, onSearch, onCreate, onProfile, onSignOut }: Props) {
+export function Sidebar({ currentUser, activeView, onHome, onExplore, onActivity, onCreate, onProfile, onSignOut }: Props) {
   return (
     <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/82 p-5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/82 lg:block">
       <div className="mb-8">
@@ -32,9 +32,9 @@ export function Sidebar({ currentUser, activeView, onHome, onExplore, onSearch, 
         {nav.map(([label, Icon]) => (
           <button
             key={label}
-            onClick={label === "Create" ? onCreate : label === "Profile" ? onProfile : label === "Home" ? onHome : label === "Explore" ? onExplore : label === "Search" ? onSearch : undefined}
+            onClick={label === "Create" ? onCreate : label === "Profile" ? onProfile : label === "Home" ? onHome : label === "Explore" ? onExplore : label === "Activity" ? onActivity : undefined}
             className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium hover:bg-slate-100 dark:hover:bg-white/10 ${
-              (label === "Home" && activeView === "canvas") || (label === "Explore" && activeView === "explore") || (label === "Search" && activeView === "search") ? "bg-slate-100 text-slate-950 dark:bg-white/10 dark:text-white" : "text-slate-700 dark:text-slate-200"
+              (label === "Home" && activeView === "canvas") || (label === "Explore" && activeView === "explore") || (label === "Activity" && activeView === "activity") ? "bg-slate-100 text-slate-950 dark:bg-white/10 dark:text-white" : "text-slate-700 dark:text-slate-200"
             }`}
           >
             <Icon size={20} />
