@@ -25,6 +25,7 @@ export type User = {
   createdAt: string;
   followersCount: number;
   followingCount: number;
+  verified: boolean;
 };
 
 export type ProfileUpdate = {

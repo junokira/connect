@@ -3,6 +3,7 @@ import { MouseEvent } from "react";
 import { Post, User } from "../types";
 import { getVideoEmbedUrl, isDirectVideoUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
+import { VerifiedBadge } from "./VerifiedBadge";
 
 type Props = {
   post: Post;
@@ -44,7 +45,10 @@ export function PostCard({ post, author, emphasized, onOpen, onProfile, onLike, 
           <img className="h-10 w-10 rounded-full object-cover" src={author.avatarUrl} alt="" />
         </button>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{author.displayName}</p>
+          <p className="flex items-center gap-1 truncate text-sm font-semibold">
+            <span className="truncate">{author.displayName}</span>
+            <VerifiedBadge verified={author.verified} size={15} />
+          </p>
           <p className="truncate text-xs text-slate-500 dark:text-slate-400">@{author.username} · {formatDate(post.createdAt)}</p>
         </div>
         <span className="ml-auto rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium uppercase text-slate-600 dark:bg-white/10 dark:text-slate-300">

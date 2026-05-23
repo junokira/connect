@@ -3,6 +3,7 @@ import { FormEvent, MouseEvent, useEffect, useState } from "react";
 import { Comment, Post, User } from "../types";
 import { getVideoEmbedUrl, isDirectVideoUrl, normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
+import { VerifiedBadge } from "./VerifiedBadge";
 
 type Props = {
   post?: Post;
@@ -59,7 +60,10 @@ export function PostModal({ post, author, currentUser, comments, users, onClose,
           <div className="flex items-center gap-3">
             <img className="h-11 w-11 rounded-full object-cover" src={author.avatarUrl} alt="" />
             <div>
-              <p className="font-semibold text-slate-950 dark:text-white">{author.displayName}</p>
+              <p className="flex items-center gap-1 font-semibold text-slate-950 dark:text-white">
+                {author.displayName}
+                <VerifiedBadge verified={author.verified} size={15} />
+              </p>
               <p className="text-sm text-slate-500">@{author.username} · {formatDate(post.createdAt)}</p>
             </div>
           </div>

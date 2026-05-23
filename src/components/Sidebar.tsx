@@ -1,5 +1,6 @@
 import { Compass, Home, PlusSquare, Search, UserRound } from "lucide-react";
 import { User } from "../types";
+import { VerifiedBadge } from "./VerifiedBadge";
 
 const nav = [
   ["Home", Home],
@@ -51,7 +52,10 @@ export function Sidebar({ currentUser, activeView, onHome, onExplore, onSearch, 
       <button onClick={onProfile} className="mt-auto flex w-full items-center gap-3 rounded-2xl p-3 text-left hover:bg-slate-100 dark:hover:bg-white/10">
         <img className="h-11 w-11 rounded-full object-cover" src={currentUser.avatarUrl} alt="" />
         <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold text-slate-950 dark:text-white">{currentUser.displayName}</span>
+          <span className="flex items-center gap-1 truncate text-sm font-semibold text-slate-950 dark:text-white">
+            <span className="truncate">{currentUser.displayName}</span>
+            <VerifiedBadge verified={currentUser.verified} size={14} />
+          </span>
           <span className="block truncate text-xs text-slate-500">@{currentUser.username}</span>
         </span>
       </button>

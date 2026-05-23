@@ -13,6 +13,7 @@ type ProfileRow = {
   created_at: string;
   followers_count: number;
   following_count: number;
+  verified?: boolean | null;
 };
 
 type PostRow = {
@@ -62,7 +63,8 @@ const toUser = (row: ProfileRow): User => ({
   website: row.website,
   createdAt: row.created_at,
   followersCount: row.followers_count,
-  followingCount: row.following_count
+  followingCount: row.following_count,
+  verified: row.verified ?? true
 });
 
 const toPost = (row: PostRow): Post => ({
@@ -161,7 +163,8 @@ export async function signUpWithPassword(email: string, password: string, profil
         location: profile?.location,
         website: profile?.website,
         avatar_url: profile?.avatarUrl,
-        banner_url: profile?.bannerUrl
+        banner_url: profile?.bannerUrl,
+        verified: true
       }
     }
   });
@@ -218,7 +221,8 @@ export async function ensureProfile(userId: string, email: string, profile?: Sig
       banner_url: profile?.bannerUrl || undefined,
       bio: profile?.bio || "New to CONNECT.",
       location: profile?.location || "",
-      website: profile?.website || ""
+      website: profile?.website || "",
+      verified: true
     })
     .select("*")
     .single();

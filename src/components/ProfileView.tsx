@@ -4,6 +4,7 @@ import { Post, PostReaction, ProfileUpdate, User } from "../types";
 import { normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
 import { PostCard } from "./PostCard";
+import { VerifiedBadge } from "./VerifiedBadge";
 
 type Props = {
   user?: User;
@@ -210,7 +211,10 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
         <div>
-          <p className="font-bold">{user.displayName}</p>
+          <p className="flex items-center gap-1 font-bold">
+            {user.displayName}
+            <VerifiedBadge verified={user.verified} size={15} />
+          </p>
           <p className="text-sm text-slate-500">{profileData.userPosts.length} posts</p>
         </div>
         <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close profile">
@@ -235,7 +239,10 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
             )}
           </div>
           <div className="mt-4">
-            <h1 className="text-2xl font-black">{user.displayName}</h1>
+            <h1 className="flex items-center gap-2 text-2xl font-black">
+              {user.displayName}
+              <VerifiedBadge verified={user.verified} size={21} />
+            </h1>
             <p className="text-slate-500">@{user.username}</p>
             <p className="mt-3 max-w-2xl whitespace-pre-wrap leading-7 text-slate-700 dark:text-slate-200">{user.bio}</p>
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500">
@@ -310,7 +317,10 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
                 <div key={candidate.id} className="flex items-center gap-3 rounded-2xl bg-slate-100 p-3 dark:bg-white/10">
                   <img className="h-10 w-10 rounded-full object-cover" src={candidate.avatarUrl} alt="" />
                   <div>
-                    <p className="text-sm font-semibold">{candidate.displayName}</p>
+                    <p className="flex items-center gap-1 text-sm font-semibold">
+                      {candidate.displayName}
+                      <VerifiedBadge verified={candidate.verified} size={14} />
+                    </p>
                     <p className="text-xs text-slate-500">@{candidate.username}</p>
                   </div>
                 </div>

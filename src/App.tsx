@@ -7,6 +7,7 @@ import { PostCard } from "./components/PostCard";
 import { PostModal } from "./components/PostModal";
 import { ProfileView } from "./components/ProfileView";
 import { Sidebar } from "./components/Sidebar";
+import { VerifiedBadge } from "./components/VerifiedBadge";
 import { supabase } from "./lib/supabase";
 import { useAppStore } from "./store/useAppStore";
 import { FeedStyle, SortMode } from "./types";
@@ -340,7 +341,10 @@ function ExploreView({
                 <button key={user.id} onClick={() => onOpenProfile(user.id)} className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-left dark:border-white/10 dark:bg-slate-950">
                   <img className="h-12 w-12 rounded-full object-cover" src={user.avatarUrl} alt="" />
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-bold">{user.displayName}</span>
+                    <span className="flex items-center gap-1 truncate text-sm font-bold">
+                      <span className="truncate">{user.displayName}</span>
+                      <VerifiedBadge verified={user.verified} size={14} />
+                    </span>
                     <span className="block truncate text-xs text-slate-500">@{user.username}</span>
                   </span>
                 </button>

@@ -11,8 +11,16 @@ create table if not exists public.profiles (
   website text not null default '',
   created_at timestamptz not null default now(),
   followers_count integer not null default 0,
-  following_count integer not null default 0
+  following_count integer not null default 0,
+  verified boolean not null default true
 );
+
+alter table public.profiles
+  add column if not exists verified boolean not null default true;
+
+update public.profiles
+set verified = true
+where verified is distinct from true;
 
 create table if not exists public.posts (
   id uuid primary key default gen_random_uuid(),
@@ -121,7 +129,7 @@ begin
   base_username := public.clean_connect_username(split_part(new.email, '@', 1));
   requested_username := public.available_connect_username(coalesce(nullif(new.raw_user_meta_data->>'username', ''), base_username), new.id);
 
-  insert into public.profiles (id, display_name, username, avatar_url, banner_url, bio, location, website)
+  insert into public.profiles (id, display_name, username, avatar_url, banner_url, bio, location, website, verified)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'display_name', base_username),
@@ -130,7 +138,8 @@ begin
     coalesce(nullif(new.raw_user_meta_data->>'banner_url', ''), 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80'),
     coalesce(nullif(new.raw_user_meta_data->>'bio', ''), 'New to CONNECT.'),
     coalesce(new.raw_user_meta_data->>'location', ''),
-    coalesce(new.raw_user_meta_data->>'website', '')
+    coalesce(new.raw_user_meta_data->>'website', ''),
+    true
   )
   on conflict (id) do nothing;
 
