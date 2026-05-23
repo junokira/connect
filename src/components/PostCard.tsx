@@ -31,6 +31,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
 
   return (
     <article
+      data-canvas-post-id={post.id}
       className={`w-[320px] overflow-hidden rounded-2xl border bg-white/92 text-slate-950 shadow-glass backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-2xl dark:border-white/10 dark:bg-[#111113]/90 dark:text-slate-50 ${
         emphasized ? "ring-2 ring-[#0a84ff]" : "border-[#d2d2d7]"
       }`}

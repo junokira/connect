@@ -461,6 +461,7 @@ export default function App() {
     followUser,
     updateProfile,
     updatePassword,
+    requestVerification,
     signOut,
     toggleTheme
   } = useAppStore();
@@ -532,7 +533,7 @@ export default function App() {
   const zoomBy = (amount: number) => setCanvasView({ ...canvasView, zoom: Math.max(0.35, Math.min(2.2, canvasView.zoom + amount)) });
   const focusPost = useCallback((post = latest, zoom = 0.95) => {
     if (!post) return;
-    setCanvasView({ x: -post.x, y: -post.y, zoom });
+    setCanvasView({ x: -(post.x + 160), y: -(post.y + 210), zoom });
   }, [latest, setCanvasView]);
 
   useEffect(() => {
@@ -668,6 +669,7 @@ export default function App() {
         onFollowUser={(id) => void followUser(id)}
         onUpdateProfile={updateProfile}
         onUpdatePassword={updatePassword}
+        onRequestVerification={requestVerification}
       />
     </div>
   );

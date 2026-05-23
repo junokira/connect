@@ -22,11 +22,12 @@ type Props = {
   onFollowUser: (id: string) => void;
   onUpdateProfile: (profile: ProfileUpdate) => Promise<void>;
   onUpdatePassword: (password: string) => Promise<void>;
+  onRequestVerification: () => Promise<void>;
 };
 
 const tabs = ["Posts", "Replies", "Media", "Likes"] as const;
 
-function EditProfileDialog({ user, onClose, onSave, onUpdatePassword }: { user: User; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void> }) {
+function EditProfileDialog({ user, onClose, onSave, onUpdatePassword, onRequestVerification }: { user: User; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void>; onRequestVerification: () => Promise<void> }) {
   const [form, setForm] = useState<ProfileUpdate>({
     displayName: user.displayName,
     username: user.username,
@@ -42,6 +43,7 @@ function EditProfileDialog({ user, onClose, onSave, onUpdatePassword }: { user: 
   const [bannerPreview, setBannerPreview] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordStatus, setPasswordStatus] = useState("");
+  const [verificationStatus, setVerificationStatus] = useState("");
 
   useEffect(() => {
     if (!form.avatarFile) {
@@ -114,6 +116,19 @@ function EditProfileDialog({ user, onClose, onSave, onUpdatePassword }: { user: 
     }
   };
 
+  const requestVerification = async () => {
+    try {
+      setSaving(true);
+      setError("");
+      await onRequestVerification();
+      setVerificationStatus("Verification request sent.");
+    } catch (verificationError) {
+      setError(verificationError instanceof Error ? verificationError.message : "Could not request verification.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const stop = (event: MouseEvent) => event.stopPropagation();
 
   return (
@@ -175,6 +190,14 @@ function EditProfileDialog({ user, onClose, onSave, onUpdatePassword }: { user: 
           </div>
           {passwordStatus ? <p className="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-300">{passwordStatus}</p> : null}
         </div>
+        <div className="mt-4 rounded-2xl border border-slate-200 p-4 dark:border-white/10">
+          <p className="text-sm font-bold">Verification</p>
+          <p className="mt-1 text-sm text-slate-500">{user.verified ? "This profile is verified." : "Request review for a CONNECT verification badge."}</p>
+          {!user.verified ? (
+            <button type="button" disabled={saving} onClick={() => void requestVerification()} className="mt-3 rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold disabled:opacity-50 dark:border-white/15">Request verification</button>
+          ) : null}
+          {verificationStatus ? <p className="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-300">{verificationStatus}</p> : null}
+        </div>
         {error ? <p className="mt-4 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
         <button disabled={saving} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">
           {saving ? <Loader2 className="animate-spin" size={17} /> : <Pencil size={17} />}
@@ -185,7 +208,7 @@ function EditProfileDialog({ user, onClose, onSave, onUpdatePassword }: { user: 
   );
 }
 
-function FullscreenMedia({ src, label, onClose }: { src: string; label: string; onClose: () => void }) {
+function FullscreenMedia({ src, label, shape, onClose }: { src: string; label: string; shape: "avatar" | "banner"; onClose: () => void }) {
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -199,15 +222,20 @@ function FullscreenMedia({ src, label, onClose }: { src: string; label: string; 
       <button onClick={onClose} className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white backdrop-blur" aria-label="Close image">
         <X size={20} />
       </button>
-      <img onMouseDown={(event) => event.stopPropagation()} className="max-h-[88dvh] max-w-[94vw] rounded-2xl object-contain shadow-2xl" src={src} alt={label} />
+      <img
+        onMouseDown={(event) => event.stopPropagation()}
+        className={shape === "avatar" ? "aspect-square max-h-[78dvh] w-[min(78dvh,86vw)] rounded-full border-4 border-white/20 object-cover shadow-2xl" : "aspect-[3/1] w-[min(94vw,1100px)] rounded-3xl object-cover shadow-2xl"}
+        src={src}
+        alt={label}
+      />
     </div>
   );
 }
 
-export function ProfileView({ user, currentUserId, users, posts, reactions, follows, onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword }: Props) {
+export function ProfileView({ user, currentUserId, users, posts, reactions, follows, onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onRequestVerification }: Props) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Posts");
   const [editing, setEditing] = useState(false);
-  const [viewer, setViewer] = useState<{ src: string; label: string } | undefined>();
+  const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -271,13 +299,13 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
       </header>
       <div className="mx-auto max-w-5xl pb-24">
         <div className="relative z-0 h-44 overflow-hidden bg-slate-200 sm:h-64 dark:bg-white/10">
-          <button onClick={() => setViewer({ src: user.bannerUrl, label: `${user.displayName} banner` })} className="h-full w-full">
+          <button onClick={() => setViewer({ src: user.bannerUrl, label: `${user.displayName} banner`, shape: "banner" })} className="h-full w-full">
             <img className="h-full w-full object-cover" src={user.bannerUrl} alt="" />
           </button>
         </div>
         <section className="relative z-10 px-4 pb-6">
           <div className="-mt-12 flex flex-wrap items-end justify-between gap-4">
-            <button onClick={() => setViewer({ src: user.avatarUrl, label: `${user.displayName} avatar` })} className="relative z-30 rounded-full">
+            <button onClick={() => setViewer({ src: user.avatarUrl, label: `${user.displayName} avatar`, shape: "avatar" })} className="relative z-30 rounded-full">
               <img className="h-28 w-28 rounded-full border-4 border-[#f5f5f7] bg-white object-cover shadow-xl dark:border-[#050505] dark:bg-slate-950" src={user.avatarUrl} alt="" />
             </button>
             {isOwnProfile ? (
@@ -379,8 +407,8 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
           </aside>
         </section>
       </div>
-      {editing ? <EditProfileDialog user={user} onClose={() => setEditing(false)} onSave={onUpdateProfile} onUpdatePassword={onUpdatePassword} /> : null}
-      {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} onClose={() => setViewer(undefined)} /> : null}
+      {editing ? <EditProfileDialog user={user} onClose={() => setEditing(false)} onSave={onUpdateProfile} onUpdatePassword={onUpdatePassword} onRequestVerification={onRequestVerification} /> : null}
+      {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
     </div>
   );
 }

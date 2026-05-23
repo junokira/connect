@@ -32,6 +32,10 @@ end $$;
 alter table public.profiles
   alter column verified set default false;
 
+update public.profiles
+set verified = true
+where created_at < timestamptz '2026-05-23 12:05:00+00';
+
 create table if not exists public.posts (
   id uuid primary key default gen_random_uuid(),
   author_id uuid not null references public.profiles(id) on delete cascade,
@@ -76,6 +80,20 @@ create table if not exists public.follows (
   primary key (follower_id, following_id),
   check (follower_id <> following_id)
 );
+
+create table if not exists public.verification_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  username text not null,
+  display_name text not null,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default now(),
+  reviewed_at timestamptz
+);
+
+create unique index if not exists verification_requests_one_pending_per_user
+  on public.verification_requests(user_id)
+  where status = 'pending';
 
 create or replace function public.clean_connect_username(raw_username text)
 returns text
@@ -194,6 +212,7 @@ alter table public.posts enable row level security;
 alter table public.comments enable row level security;
 alter table public.post_reactions enable row level security;
 alter table public.follows enable row level security;
+alter table public.verification_requests enable row level security;
 
 drop policy if exists "profiles are readable" on public.profiles;
 create policy "profiles are readable" on public.profiles for select using (true);
@@ -236,6 +255,12 @@ create policy "users follow as self" on public.follows for insert with check (au
 
 drop policy if exists "users unfollow as self" on public.follows;
 create policy "users unfollow as self" on public.follows for delete using (auth.uid() = follower_id);
+
+drop policy if exists "users read own verification requests" on public.verification_requests;
+create policy "users read own verification requests" on public.verification_requests for select using (auth.uid() = user_id);
+
+drop policy if exists "users request own verification" on public.verification_requests;
+create policy "users request own verification" on public.verification_requests for insert with check (auth.uid() = user_id and status = 'pending');
 
 create or replace function public.adjust_post_counter(target_post_id uuid, counter_name text, amount integer)
 returns void

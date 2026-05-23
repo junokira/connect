@@ -8,6 +8,7 @@ import {
   getSessionUserId,
   loadConnectData,
   reactToPostReal,
+  requestVerificationReal,
   sendMagicLink,
   sendPasswordReset,
   sendPhoneOtp,
@@ -62,6 +63,7 @@ type AppState = {
   requestPhoneOtp: (phone: string) => Promise<void>;
   signInWithSocialProvider: (provider: "google" | "apple") => Promise<void>;
   updateProfile: (profile: ProfileUpdate) => Promise<void>;
+  requestVerification: () => Promise<void>;
   signOut: () => Promise<void>;
   createPost: (draft: DraftInput) => Promise<Post>;
   setActivePost: (id?: string) => void;
@@ -249,6 +251,12 @@ export const useAppStore = create<AppState>()(
           activeProfileId: userId,
           error: undefined
         });
+      },
+      requestVerification: async () => {
+        const currentUser = get().users.find((user) => user.id === get().currentUserId);
+        if (!currentUser) throw new Error("You must be signed in to request verification.");
+        await requestVerificationReal(currentUser);
+        set({ error: undefined });
       },
       signOut: async () => {
         await signOutReal();

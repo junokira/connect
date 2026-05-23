@@ -58,6 +58,8 @@ type FollowRow = {
   created_at: string;
 };
 
+const legacyVerifiedCutoff = Date.parse("2026-05-23T12:05:00.000Z");
+
 const toUser = (row: ProfileRow): User => ({
   id: row.id,
   displayName: row.display_name,
@@ -70,7 +72,7 @@ const toUser = (row: ProfileRow): User => ({
   createdAt: row.created_at,
   followersCount: row.followers_count,
   followingCount: row.following_count,
-  verified: row.verified ?? false
+  verified: Boolean(row.verified) || Date.parse(row.created_at) < legacyVerifiedCutoff
 });
 
 const toPost = (row: PostRow): Post => ({
@@ -291,6 +293,20 @@ export async function updatePasswordReal(password: string) {
   const client = requireSupabase();
   const { error } = await client.auth.updateUser({ password });
   if (error) throw error;
+}
+
+export async function requestVerificationReal(user: User) {
+  const client = requireSupabase();
+  const { error } = await client.from("verification_requests").insert({
+    user_id: user.id,
+    username: user.username,
+    display_name: user.displayName,
+    status: "pending"
+  });
+  if (error) {
+    if (/duplicate key/i.test(error.message)) throw new Error("Your verification request is already pending.");
+    throw error;
+  }
 }
 
 export async function sendMagicLink(email: string) {
