@@ -101,14 +101,14 @@ function EditProfileDialog({ user, onClose, onSave }: { user: User; onClose: () 
           </button>
         </div>
         <div className="relative mb-16">
-          <div className="h-36 overflow-hidden rounded-3xl bg-slate-100 dark:bg-white/10">
+          <div className="aspect-[3/1] overflow-hidden rounded-3xl bg-slate-100 dark:bg-white/10">
             <img className="h-full w-full object-cover" src={bannerPreview || form.bannerUrl} alt="" />
           </div>
           <label className="absolute right-3 top-3 flex cursor-pointer items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-xs font-bold shadow-glass backdrop-blur dark:bg-slate-950/80">
             <Upload size={14} /> Banner
             <input className="sr-only" type="file" accept="image/*" onChange={(event) => updateFile("bannerFile", event.target.files?.[0])} />
           </label>
-          <div className="absolute -bottom-12 left-5">
+          <div className="absolute -bottom-12 left-5 z-20">
             <img className="h-24 w-24 rounded-full border-4 border-white bg-white object-cover shadow-xl dark:border-[#0f1115] dark:bg-[#0f1115]" src={avatarPreview || form.avatarUrl} alt="" />
             <label className="absolute bottom-1 right-1 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-slate-950 text-white shadow-lg dark:bg-white dark:text-slate-950">
               <ImagePlus size={16} />
@@ -207,7 +207,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
   const websiteUrl = user.website ? normalizeExternalUrl(user.website) : "";
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f7f7f4] text-slate-950 dark:bg-[#0e1116] dark:text-white">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
         <div>
           <p className="font-bold">{user.displayName}</p>
@@ -218,15 +218,15 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
         </button>
       </header>
       <div className="mx-auto max-w-5xl pb-24">
-        <div className="relative h-44 overflow-hidden bg-slate-200 sm:h-64 dark:bg-white/10">
+        <div className="relative z-0 h-44 overflow-hidden bg-slate-200 sm:h-64 dark:bg-white/10">
           <button onClick={() => setViewer({ src: user.bannerUrl, label: `${user.displayName} banner` })} className="h-full w-full">
             <img className="h-full w-full object-cover" src={user.bannerUrl} alt="" />
           </button>
         </div>
-        <section className="px-4 pb-6">
+        <section className="relative z-10 px-4 pb-6">
           <div className="-mt-12 flex flex-wrap items-end justify-between gap-4">
-            <button onClick={() => setViewer({ src: user.avatarUrl, label: `${user.displayName} avatar` })} className="rounded-full">
-              <img className="h-28 w-28 rounded-full border-4 border-[#f7f7f4] bg-white object-cover shadow-xl dark:border-[#0e1116] dark:bg-slate-950" src={user.avatarUrl} alt="" />
+            <button onClick={() => setViewer({ src: user.avatarUrl, label: `${user.displayName} avatar` })} className="relative z-30 rounded-full">
+              <img className="h-28 w-28 rounded-full border-4 border-[#f5f5f7] bg-white object-cover shadow-xl dark:border-[#050505] dark:bg-slate-950" src={user.avatarUrl} alt="" />
             </button>
             {isOwnProfile ? (
               <button onClick={() => setEditing(true)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Edit profile</button>
@@ -276,7 +276,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
         <section className="grid gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div>
             <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">{activeTab === "Media" ? "Media" : activeTab === "Likes" ? "Liked posts" : "Status feed"}</h2>
-            <div className="mx-auto grid max-w-[700px] gap-4 sm:grid-cols-2">
+            <div className="mx-auto grid max-w-[700px] justify-items-center gap-4 sm:grid-cols-2">
               {visiblePosts.map((post) => (
                 <div key={post.id} className="space-y-2">
                   {post.authorId !== user.id ? <p className="text-xs font-bold uppercase text-emerald-600 dark:text-emerald-300">Reposted by @{user.username}</p> : null}

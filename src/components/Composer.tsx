@@ -21,6 +21,8 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   const [thumbnailFile, setThumbnailFile] = useState<File | undefined>();
   const [mediaPreview, setMediaPreview] = useState("");
   const [thumbnailPreview, setThumbnailPreview] = useState("");
+  const [previewFit, setPreviewFit] = useState<"contain" | "cover">("contain");
+  const [previewAspect, setPreviewAspect] = useState<"natural" | "square" | "portrait" | "wide">("natural");
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
 
@@ -62,6 +64,8 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   if (!open) return null;
 
   const stop = (event: MouseEvent) => event.stopPropagation();
+  const aspectClass = previewAspect === "square" ? "aspect-square" : previewAspect === "portrait" ? "aspect-[4/5]" : previewAspect === "wide" ? "aspect-video" : "";
+  const fitClass = previewFit === "cover" ? "object-cover" : "object-contain";
 
   const publish = async (event: FormEvent) => {
     event.preventDefault();
@@ -172,13 +176,31 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
                 </label>
               </>
             ) : null}
+            <div className="grid gap-2 rounded-2xl bg-slate-100 p-2 dark:bg-white/10 sm:grid-cols-2">
+              <label className="text-xs font-bold text-slate-500">
+                Crop
+                <select value={previewFit} onChange={(event) => setPreviewFit(event.target.value as "contain" | "cover")} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none dark:border-white/10 dark:bg-slate-950 dark:text-white">
+                  <option value="contain">Show full image/video</option>
+                  <option value="cover">Fill frame crop</option>
+                </select>
+              </label>
+              <label className="text-xs font-bold text-slate-500">
+                Frame
+                <select value={previewAspect} onChange={(event) => setPreviewAspect(event.target.value as "natural" | "square" | "portrait" | "wide")} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none dark:border-white/10 dark:bg-slate-950 dark:text-white">
+                  <option value="natural">Natural</option>
+                  <option value="square">Square</option>
+                  <option value="portrait">Portrait</option>
+                  <option value="wide">Horizontal</option>
+                </select>
+              </label>
+            </div>
           </div>
         )}
 
         <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
-          {type === "photo" && (mediaPreview || imageUrl) ? <img className="max-h-[420px] w-full bg-slate-100 object-contain dark:bg-black" src={mediaPreview || imageUrl} alt="" /> : null}
-          {type === "video" && mediaPreview ? <video className="max-h-[420px] w-full bg-black object-contain" src={mediaPreview} controls /> : null}
-          {type === "video" && !mediaPreview && normalizedVideoUrl && isDirectVideoUrl(normalizedVideoUrl) ? <video className="max-h-[420px] w-full bg-black object-contain" src={normalizedVideoUrl} poster={thumbnailPreview || thumbnailUrl} controls /> : null}
+          {type === "photo" && (mediaPreview || imageUrl) ? <img className={`max-h-[420px] w-full bg-slate-100 dark:bg-black ${aspectClass} ${fitClass}`} src={mediaPreview || imageUrl} alt="" /> : null}
+          {type === "video" && mediaPreview ? <video className={`max-h-[420px] w-full bg-black ${aspectClass} ${fitClass}`} src={mediaPreview} controls /> : null}
+          {type === "video" && !mediaPreview && normalizedVideoUrl && isDirectVideoUrl(normalizedVideoUrl) ? <video className={`max-h-[420px] w-full bg-black ${aspectClass} ${fitClass}`} src={normalizedVideoUrl} poster={thumbnailPreview || thumbnailUrl} controls /> : null}
           {type === "video" && !mediaPreview && normalizedVideoUrl && videoEmbedUrl ? <iframe className="aspect-video w-full bg-black" src={videoEmbedUrl} title="External video preview" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /> : null}
           {type === "video" && !mediaPreview && normalizedVideoUrl && !videoEmbedUrl && !isDirectVideoUrl(normalizedVideoUrl) ? (
             <a className="block bg-slate-950 p-4 text-sm font-semibold text-white underline" href={normalizedVideoUrl} target="_blank" rel="noreferrer">Open external video</a>

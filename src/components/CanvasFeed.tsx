@@ -119,6 +119,12 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, view, onViewChan
     return positionedPosts.filter(({ position }) => position.x > minX && position.x < maxX && position.y > minY && position.y < maxY);
   }, [positionedPosts, size.height, size.width, view]);
 
+  useEffect(() => {
+    if (!positionedPosts.length || visiblePosts.length) return;
+    const latest = [...positionedPosts].sort((a, b) => Date.parse(b.post.createdAt) - Date.parse(a.post.createdAt))[0];
+    onViewChange({ x: -latest.position.x, y: -latest.position.y, zoom: 0.95 });
+  }, [onViewChange, positionedPosts, visiblePosts.length]);
+
   const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest("button,input,select,textarea,a,video")) return;
     updateSize();
@@ -153,7 +159,7 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, view, onViewChan
   return (
     <main
       ref={viewportRef}
-      className="canvas-viewport relative h-screen flex-1 cursor-grab overflow-hidden bg-[#f7f7f4] text-slate-950 active:cursor-grabbing dark:bg-[#0e1116] dark:text-white"
+      className="canvas-viewport relative h-screen flex-1 cursor-grab overflow-hidden bg-[#f5f5f7] text-slate-950 active:cursor-grabbing dark:bg-[#050505] dark:text-white"
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
       onPointerUp={pointerUp}

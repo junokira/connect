@@ -2,7 +2,7 @@ import { Bookmark, Heart, MessageCircle, Repeat2, Video } from "lucide-react";
 import { MouseEvent } from "react";
 import { Post, User } from "../types";
 import { getVideoEmbedUrl, isDirectVideoUrl } from "../utils/media";
-import { formatCount } from "../utils/posts";
+import { formatCount, formatDate } from "../utils/posts";
 
 type Props = {
   post: Post;
@@ -27,8 +27,8 @@ export function PostCard({ post, author, emphasized, onOpen, onProfile, onLike, 
 
   return (
     <article
-      className={`w-[320px] overflow-hidden rounded-2xl border bg-white/88 text-slate-950 shadow-glass backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-2xl dark:border-white/10 dark:bg-slate-950/86 dark:text-slate-50 ${
-        emphasized ? "ring-2 ring-teal-400" : "border-slate-200"
+      className={`w-[320px] overflow-hidden rounded-2xl border bg-white/92 text-slate-950 shadow-glass backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-2xl dark:border-white/10 dark:bg-[#111113]/90 dark:text-slate-50 ${
+        emphasized ? "ring-2 ring-[#0a84ff]" : "border-[#d2d2d7]"
       }`}
       onClick={onOpen}
     >
@@ -45,7 +45,7 @@ export function PostCard({ post, author, emphasized, onOpen, onProfile, onLike, 
         </button>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{author.displayName}</p>
-          <p className="truncate text-xs text-slate-500 dark:text-slate-400">@{author.username}</p>
+          <p className="truncate text-xs text-slate-500 dark:text-slate-400">@{author.username} · {formatDate(post.createdAt)}</p>
         </div>
         <span className="ml-auto rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium uppercase text-slate-600 dark:bg-white/10 dark:text-slate-300">
           {post.type}
@@ -76,7 +76,7 @@ export function PostCard({ post, author, emphasized, onOpen, onProfile, onLike, 
         <p className="line-clamp-5 text-sm leading-6 text-slate-700 dark:text-slate-200">{text}</p>
         <div className="flex flex-wrap gap-1">
           {post.hashtags.map((tag) => (
-            <span key={tag} className="text-xs font-medium text-teal-700 dark:text-teal-300">
+                <span key={tag} className="text-xs font-medium text-[#007aff] dark:text-[#64d2ff]">
               #{tag}
             </span>
           ))}

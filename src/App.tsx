@@ -1,5 +1,5 @@
 import { Apple, Eye, EyeOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, X } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasFeed } from "./components/CanvasFeed";
 import { Composer } from "./components/Composer";
 import { MobileNav } from "./components/MobileNav";
@@ -91,7 +91,7 @@ function AuthGate() {
   };
 
   return (
-    <main className="h-[100dvh] overflow-y-auto bg-[#f7f7f4] p-4 dark:bg-[#0e1116]">
+    <main className="h-[100dvh] overflow-y-auto bg-[#f5f5f7] p-4 dark:bg-[#050505]">
       <form onSubmit={submit} className="mx-auto my-4 w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-glass dark:border-white/10 dark:bg-slate-950 sm:my-10">
         <p className="mb-1 text-2xl font-black text-slate-950 dark:text-white">CONNECT</p>
         <p className="mb-5 text-sm text-slate-500">Enter the spatial feed with real Supabase auth.</p>
@@ -270,7 +270,7 @@ function SearchView({ posts, users, onOpenPost, onOpenProfile }: { posts: Return
           <h1 className="mb-3 text-3xl font-black">Search</h1>
           <SearchBox />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid justify-items-center gap-4 md:grid-cols-2 xl:grid-cols-3">
           {posts.map((post) => (
             <PostCard key={post.id} post={post} author={users.find((user) => user.id === post.authorId) || users[0]} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(post.authorId)} onLike={() => undefined} onComment={() => onOpenPost(post.id)} onRepost={() => undefined} onBookmark={() => undefined} />
           ))}
@@ -305,7 +305,7 @@ function ExploreView({
         </div>
         <section className="mb-8">
           <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Trending now</h2>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid justify-items-center gap-4 md:grid-cols-2 xl:grid-cols-3">
             {trending.map((post) => (
               <PostCard
                 key={post.id}
@@ -390,6 +390,7 @@ export default function App() {
   const [chromeHidden, setChromeHidden] = useState(false);
   const [activeView, setActiveView] = useState<"canvas" | "explore" | "search">("canvas");
   const refreshTimer = useRef<number | undefined>(undefined);
+  const focusedInitialCluster = useRef(false);
 
   useEffect(() => {
     void initialize();
@@ -436,6 +437,18 @@ export default function App() {
   const activePost = posts.find((post) => post.id === activePostId);
   const activeAuthor = activePost ? users.find((user) => user.id === activePost.authorId) : undefined;
   const activeProfile = users.find((user) => user.id === activeProfileId);
+  const latest = [...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  const zoomBy = (amount: number) => setCanvasView({ ...canvasView, zoom: Math.max(0.35, Math.min(2.2, canvasView.zoom + amount)) });
+  const focusPost = useCallback((post = latest, zoom = 0.95) => {
+    if (!post) return;
+    setCanvasView({ x: -post.x, y: -post.y, zoom });
+  }, [latest, setCanvasView]);
+
+  useEffect(() => {
+    if (!authed || !latest || focusedInitialCluster.current) return;
+    focusedInitialCluster.current = true;
+    focusPost(latest, 0.95);
+  }, [authed, focusPost, latest]);
 
   if (loading && !authed) {
     return (
@@ -447,16 +460,16 @@ export default function App() {
 
   if (!authed || !currentUser) return <AuthGate />;
 
-  const zoomBy = (amount: number) => setCanvasView({ ...canvasView, zoom: Math.max(0.35, Math.min(2.2, canvasView.zoom + amount)) });
-  const latest = [...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
-
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f7f7f4] text-slate-950 dark:bg-[#0e1116] dark:text-white">
+    <div className="flex h-screen overflow-hidden bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white">
       {!chromeHidden ? (
         <Sidebar
           currentUser={currentUser}
           activeView={activeView}
-          onHome={() => setActiveView("canvas")}
+          onHome={() => {
+            setActiveView("canvas");
+            focusPost(latest, 0.95);
+          }}
           onExplore={() => setActiveView("explore")}
           onSearch={() => setActiveView("search")}
           onCreate={() => setComposerOpen(true)}
@@ -502,7 +515,10 @@ export default function App() {
       {!chromeHidden ? (
         <MobileNav
           activeView={activeView}
-          onHome={() => setActiveView("canvas")}
+          onHome={() => {
+            setActiveView("canvas");
+            focusPost(latest, 0.95);
+          }}
           onExplore={() => setActiveView("explore")}
           onCreate={() => setComposerOpen(true)}
           onSearch={() => setActiveView("search")}
@@ -516,8 +532,8 @@ export default function App() {
         zoom={canvasView.zoom}
         onZoomIn={() => zoomBy(0.12)}
         onZoomOut={() => zoomBy(-0.12)}
-        onReset={() => setCanvasView({ x: 0, y: 0, zoom: 1 })}
-        onLatest={() => latest && setCanvasView({ x: -latest.x, y: -latest.y, zoom: 1 })}
+        onReset={() => focusPost(latest, 0.95)}
+        onLatest={() => focusPost(latest, 0.95)}
         onHide={() => {
           setChromeHidden(true);
           setAdjustOpen(false);
