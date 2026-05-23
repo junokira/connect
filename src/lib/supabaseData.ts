@@ -144,6 +144,11 @@ function requireSupabase() {
   return supabase;
 }
 
+function authRedirectUrl(mode: "confirmed" | "magic" = "confirmed") {
+  const origin = typeof window === "undefined" ? "https://connect-one-kappa.vercel.app" : window.location.origin;
+  return `${origin}/?auth=${mode}`;
+}
+
 export function normalizeUsername(value: string, fallback = "connectuser") {
   const cleaned = value
     .trim()
@@ -171,9 +176,47 @@ async function resolveAvailableUsername(username: string, currentUserId?: string
 
 export async function getSessionUserId() {
   const client = requireSupabase();
-  const { data, error } = await client.auth.getUser();
+  const { data, error } = await client.auth.getSession();
   if (error) throw error;
-  return data.user?.id;
+  return data.session?.user.id;
+}
+
+export async function completeAuthRedirect() {
+  if (typeof window === "undefined") return undefined;
+  const client = requireSupabase();
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("code");
+  const authMode = url.searchParams.get("auth");
+
+  if (code) {
+    const { error } = await client.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+  }
+
+  const { data, error } = await client.auth.getSession();
+  if (error) throw error;
+  const user = data.session?.user;
+
+  if (code || authMode) {
+    url.searchParams.delete("code");
+    url.searchParams.delete("auth");
+    url.searchParams.delete("error");
+    url.searchParams.delete("error_code");
+    url.searchParams.delete("error_description");
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  if (!user) return undefined;
+  await ensureProfile(user.id, user.email || `${user.id}@connect.local`, {
+    displayName: user.user_metadata?.display_name || user.email?.split("@")[0] || "CONNECT user",
+    username: user.user_metadata?.username || user.email?.split("@")[0] || "connectuser",
+    bio: user.user_metadata?.bio || "New to CONNECT.",
+    location: user.user_metadata?.location || "",
+    website: user.user_metadata?.website || "",
+    avatarUrl: user.user_metadata?.avatar_url,
+    bannerUrl: user.user_metadata?.banner_url
+  });
+  return user.id;
 }
 
 export async function signInWithPassword(email: string, password: string) {
@@ -192,6 +235,7 @@ export async function signUpWithPassword(email: string, password: string, profil
     email,
     password,
     options: {
+      emailRedirectTo: authRedirectUrl("confirmed"),
       data: {
         display_name: profile?.displayName || email.split("@")[0],
         username,
@@ -205,16 +249,16 @@ export async function signUpWithPassword(email: string, password: string, profil
   });
   if (signUpError) throw signUpError;
   if (!signUpData.user) throw new Error("Supabase did not return a user.");
-  if (!signUpData.session) throw new Error("Check your email to confirm your CONNECT account, then sign in.");
+  if (!signUpData.session) return { userId: signUpData.user.id, sessionReady: false };
   await ensureProfile(signUpData.user.id, email, { ...profile, username });
-  return signUpData.user.id;
+  return { userId: signUpData.user.id, sessionReady: true };
 }
 
 export async function sendMagicLink(email: string) {
   const client = requireSupabase();
   const { error } = await client.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.origin }
+    options: { emailRedirectTo: authRedirectUrl("magic") }
   });
   if (error) throw error;
 }

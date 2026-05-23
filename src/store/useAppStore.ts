@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { isSupabaseConfigured } from "../lib/supabase";
 import {
   addCommentReal,
+  completeAuthRedirect,
   createPostReal,
   getSessionUserId,
   loadConnectData,
@@ -50,7 +51,7 @@ type AppState = {
   initialize: () => Promise<void>;
   refreshData: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, profile: SignupProfile) => Promise<void>;
+  signUp: (email: string, password: string, profile: SignupProfile) => Promise<boolean>;
   requestMagicLink: (email: string) => Promise<void>;
   requestPhoneOtp: (phone: string) => Promise<void>;
   signInWithSocialProvider: (provider: "google" | "apple") => Promise<void>;
@@ -127,7 +128,8 @@ export const useAppStore = create<AppState>()(
         }
         try {
           set({ backendMode: "supabase", loading: true, error: undefined });
-          const userId = await getSessionUserId();
+          const redirectedUserId = await completeAuthRedirect();
+          const userId = redirectedUserId || (await getSessionUserId());
           const data = await loadConnectData();
           set({
             ...data,
@@ -161,15 +163,21 @@ export const useAppStore = create<AppState>()(
       signUp: async (email, password, profile) => {
         if (!isSupabaseConfigured) {
           set({ error: "Supabase is required for sign up. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel." });
-          return;
+          return false;
         }
         try {
           set({ loading: true, error: undefined });
-          const userId = await signUpWithPassword(email, password, profile);
+          const { userId, sessionReady } = await signUpWithPassword(email, password, profile);
+          if (!sessionReady) {
+            set({ authed: false, currentUserId: "", loading: false, error: undefined });
+            return false;
+          }
           const data = await loadConnectData();
           set({ ...data, currentUserId: userId, activeProfileId: userId, authed: true, loading: false });
+          return true;
         } catch (error) {
           set({ error: error instanceof Error ? error.message : "Unable to create your account.", loading: false });
+          return false;
         }
       },
       requestMagicLink: async (email) => {

@@ -60,15 +60,18 @@ function AuthGate() {
       void signIn(email, password);
       return;
     }
-    void signUp(email, password, {
-      displayName,
-      username,
-      bio,
-      location: "",
-      website: "",
-      avatarUrl,
-      bannerUrl
-    });
+    void (async () => {
+      const signedIn = await signUp(email, password, {
+        displayName,
+        username,
+        bio,
+        location: "",
+        website: "",
+        avatarUrl,
+        bannerUrl
+      });
+      if (!signedIn) setStatus("Confirmation email sent. Open it on this device or browser, then CONNECT will finish signing you in.");
+    })();
   };
 
   const sendLink = async () => {
