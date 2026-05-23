@@ -54,7 +54,7 @@ export function PostModal({ post, author, currentUser, comments, users, onClose,
   const stop = (event: MouseEvent) => event.stopPropagation();
 
   return (
-    <div onMouseDown={onClose} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+    <div onMouseDown={onClose} className="fixed inset-0 z-[65] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
       <section onMouseDown={stop} className="thin-scrollbar max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-t-3xl bg-white shadow-2xl dark:bg-slate-950 sm:rounded-3xl">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
           <div className="flex items-center gap-3">

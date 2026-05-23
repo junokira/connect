@@ -14,6 +14,9 @@ type Props = {
   reactions: PostReaction[];
   onClose: () => void;
   onOpenPost: (id: string) => void;
+  onLikePost: (id: string) => void;
+  onRepostPost: (id: string) => void;
+  onBookmarkPost: (id: string) => void;
   onUpdateProfile: (profile: ProfileUpdate) => Promise<void>;
 };
 
@@ -176,7 +179,7 @@ function FullscreenMedia({ src, label, onClose }: { src: string; label: string; 
   );
 }
 
-export function ProfileView({ user, currentUserId, users, posts, reactions, onClose, onOpenPost, onUpdateProfile }: Props) {
+export function ProfileView({ user, currentUserId, users, posts, reactions, onClose, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onUpdateProfile }: Props) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Posts");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string } | undefined>();
@@ -272,10 +275,10 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
               emphasized
               onOpen={() => onOpenPost(profileData.pinned?.id || "")}
               onProfile={() => undefined}
-              onLike={() => undefined}
+              onLike={() => onLikePost(profileData.pinned?.id || "")}
               onComment={() => onOpenPost(profileData.pinned?.id || "")}
-              onRepost={() => undefined}
-              onBookmark={() => undefined}
+              onRepost={() => onRepostPost(profileData.pinned?.id || "")}
+              onBookmark={() => onBookmarkPost(profileData.pinned?.id || "")}
             />
           </section>
         ) : null}
@@ -292,10 +295,10 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
                     author={users.find((candidate) => candidate.id === post.authorId) || user}
                     onOpen={() => onOpenPost(post.id)}
                     onProfile={() => undefined}
-                    onLike={() => undefined}
+                    onLike={() => onLikePost(post.id)}
                     onComment={() => onOpenPost(post.id)}
-                    onRepost={() => undefined}
-                    onBookmark={() => undefined}
+                    onRepost={() => onRepostPost(post.id)}
+                    onBookmark={() => onBookmarkPost(post.id)}
                   />
                 </div>
               ))}

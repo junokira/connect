@@ -253,33 +253,74 @@ export const useAppStore = create<AppState>()(
       setSearch: (search) => set({ search }),
       setCanvasView: (view) => set({ canvasView: view }),
       likePost: async (id) => {
+        const userId = get().currentUserId;
+        if (!userId) throw new Error("You must be signed in to like posts.");
+        const existing = get().reactions.find((reaction) => reaction.postId === id && reaction.userId === userId && reaction.type === "like");
+        const optimisticReaction: PostReaction = existing || { postId: id, userId, type: "like", createdAt: new Date().toISOString() };
+        set({
+          reactions: existing ? get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "like")) : [optimisticReaction, ...get().reactions],
+          posts: get().posts.map((post) => (post.id === id ? { ...post, likesCount: Math.max(0, post.likesCount + (existing ? -1 : 1)) } : post)),
+          error: undefined
+        });
         try {
-          const reaction = await reactToPostReal(id, get().currentUserId, "like");
-          if (!reaction) return;
-          set({ posts: get().posts.map((post) => (post.id === id ? { ...post, likesCount: post.likesCount + 1 } : post)), error: undefined });
+          const result = await reactToPostReal(id, userId, "like");
+          set({
+            reactions: result.active ? [result.reaction, ...get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "like"))] : get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "like")),
+            error: undefined
+          });
         } catch (error) {
+          set({
+            reactions: existing ? [existing, ...get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "like"))] : get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "like")),
+            posts: get().posts.map((post) => (post.id === id ? { ...post, likesCount: Math.max(0, post.likesCount + (existing ? 1 : -1)) } : post))
+          });
           set({ error: error instanceof Error ? error.message : "Could not like this post." });
         }
       },
       repostPost: async (id) => {
+        const userId = get().currentUserId;
+        if (!userId) throw new Error("You must be signed in to repost.");
+        const existing = get().reactions.find((reaction) => reaction.postId === id && reaction.userId === userId && reaction.type === "repost");
+        const optimisticReaction: PostReaction = existing || { postId: id, userId, type: "repost", createdAt: new Date().toISOString() };
+        set({
+          reactions: existing ? get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "repost")) : [optimisticReaction, ...get().reactions],
+          posts: get().posts.map((post) => (post.id === id ? { ...post, repostsCount: Math.max(0, post.repostsCount + (existing ? -1 : 1)) } : post)),
+          error: undefined
+        });
         try {
-          const reaction = await reactToPostReal(id, get().currentUserId, "repost");
-          if (!reaction) return;
+          const result = await reactToPostReal(id, userId, "repost");
           set({
-            reactions: [reaction, ...get().reactions],
-            posts: get().posts.map((post) => (post.id === id ? { ...post, repostsCount: post.repostsCount + 1 } : post)),
+            reactions: result.active ? [result.reaction, ...get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "repost"))] : get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "repost")),
             error: undefined
           });
         } catch (error) {
+          set({
+            reactions: existing ? [existing, ...get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "repost"))] : get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "repost")),
+            posts: get().posts.map((post) => (post.id === id ? { ...post, repostsCount: Math.max(0, post.repostsCount + (existing ? 1 : -1)) } : post))
+          });
           set({ error: error instanceof Error ? error.message : "Could not repost this post." });
         }
       },
       bookmarkPost: async (id) => {
+        const userId = get().currentUserId;
+        if (!userId) throw new Error("You must be signed in to bookmark posts.");
+        const existing = get().reactions.find((reaction) => reaction.postId === id && reaction.userId === userId && reaction.type === "bookmark");
+        const optimisticReaction: PostReaction = existing || { postId: id, userId, type: "bookmark", createdAt: new Date().toISOString() };
+        set({
+          reactions: existing ? get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "bookmark")) : [optimisticReaction, ...get().reactions],
+          posts: get().posts.map((post) => (post.id === id ? { ...post, bookmarksCount: Math.max(0, post.bookmarksCount + (existing ? -1 : 1)) } : post)),
+          error: undefined
+        });
         try {
-          const reaction = await reactToPostReal(id, get().currentUserId, "bookmark");
-          if (!reaction) return;
-          set({ posts: get().posts.map((post) => (post.id === id ? { ...post, bookmarksCount: post.bookmarksCount + 1 } : post)), error: undefined });
+          const result = await reactToPostReal(id, userId, "bookmark");
+          set({
+            reactions: result.active ? [result.reaction, ...get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "bookmark"))] : get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "bookmark")),
+            error: undefined
+          });
         } catch (error) {
+          set({
+            reactions: existing ? [existing, ...get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "bookmark"))] : get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "bookmark")),
+            posts: get().posts.map((post) => (post.id === id ? { ...post, bookmarksCount: Math.max(0, post.bookmarksCount + (existing ? 1 : -1)) } : post))
+          });
           set({ error: error instanceof Error ? error.message : "Could not bookmark this post." });
         }
       },

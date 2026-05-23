@@ -1,3 +1,4 @@
+import { LocateFixed } from "lucide-react";
 import { PointerEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasView, FeedStyle, Post, SortMode, User } from "../types";
 import { PostCard } from "./PostCard";
@@ -11,6 +12,7 @@ type Props = {
   onViewChange: (view: CanvasView) => void;
   onOpenPost: (id: string) => void;
   onOpenProfile: (id: string) => void;
+  onLatest: () => void;
   onLikePost: (id: string) => void;
   onRepostPost: (id: string) => void;
   onBookmarkPost: (id: string) => void;
@@ -47,7 +49,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: typeOffset + column * 80 - 80, y: row * 330 - 220 };
 };
 
-export function CanvasFeed({ posts, users, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost }: Props) {
+export function CanvasFeed({ posts, users, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLatest, onLikePost, onRepostPost, onBookmarkPost }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView } | null>(null);
   const didDragRef = useRef(false);
@@ -173,12 +175,37 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, view, onViewChan
       }}
     >
       <div className="canvas-dots absolute inset-0" style={{ backgroundPosition: `${view.x}px ${view.y}px`, backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px` }} />
+      <button
+        onClick={(event) => {
+          event.stopPropagation();
+          onLatest();
+        }}
+        className="absolute left-4 top-4 z-20 flex h-11 items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-[#111113]/88"
+        aria-label="Jump to latest posts"
+      >
+        <LocateFixed size={17} />
+        <span className="hidden sm:inline">Latest</span>
+      </button>
+      {posts.length && !visiblePosts.length ? (
+        <div className="absolute left-1/2 top-24 z-20 w-[min(90vw,360px)] -translate-x-1/2 rounded-3xl border border-amber-200 bg-white/92 p-4 text-center text-sm shadow-glass backdrop-blur-xl dark:border-amber-300/20 dark:bg-[#111113]/92">
+          <p className="font-bold">Posts are loaded, but the canvas is off target.</p>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">{posts.length} posts are available. Use Latest to recenter.</p>
+          <button onClick={onLatest} className="mt-3 rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">Show posts</button>
+        </div>
+      ) : null}
+      {!posts.length ? (
+        <div className="absolute left-1/2 top-24 z-20 w-[min(90vw,360px)] -translate-x-1/2 rounded-3xl border border-[#d2d2d7] bg-white/92 p-4 text-center text-sm shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-[#111113]/92">
+          <p className="font-bold">No canvas posts yet.</p>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">Create a post and it will appear near the center of the map.</p>
+        </div>
+      ) : null}
       <div
         className="canvas-layer absolute left-0 top-0"
         style={{ transform: `translate3d(${size.width / 2 + view.x}px, ${size.height / 2 + view.y}px, 0) scale(${view.zoom})` }}
       >
         {visiblePosts.map(({ post, position }) => {
-          const author = users.find((user) => user.id === post.authorId)!;
+          const author = users.find((user) => user.id === post.authorId) || users[0];
+          if (!author) return null;
           const emphasized = sortMode === "trending" || sortMode.startsWith("most");
           return (
             <div key={post.id} className="absolute will-change-transform" style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}>

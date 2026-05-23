@@ -25,8 +25,8 @@ type PostRow = {
   image_url?: string | null;
   video_url?: string | null;
   thumbnail_url?: string | null;
-  x: number;
-  y: number;
+  x?: number | null;
+  y?: number | null;
   created_at: string;
   updated_at: string;
   likes_count: number;
@@ -76,8 +76,8 @@ const toPost = (row: PostRow): Post => ({
   imageUrl: row.image_url || undefined,
   videoUrl: row.video_url || undefined,
   thumbnailUrl: row.thumbnail_url || undefined,
-  x: row.x,
-  y: row.y,
+  x: Number.isFinite(row.x) ? Number(row.x) : 0,
+  y: Number.isFinite(row.y) ? Number(row.y) : 0,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   likesCount: row.likes_count,
@@ -87,6 +87,42 @@ const toPost = (row: PostRow): Post => ({
   hashtags: row.hashtags,
   pinned: row.pinned
 });
+
+const fallbackCanvasPosition = (index: number) => {
+  if (index === 0) return { x: 0, y: 0 };
+  const ring = Math.ceil((Math.sqrt(index + 1) - 1) / 2);
+  const slots = Math.max(8, ring * 8);
+  const slot = index % slots;
+  const radius = 290 + ring * 255;
+  const angle = (slot / slots) * Math.PI * 2 + ring * 0.38;
+  return { x: Math.round(Math.cos(angle) * radius), y: Math.round(Math.sin(angle) * radius) };
+};
+
+const ensureCanvasPositions = (posts: Post[]) => {
+  const seen = new Set<string>();
+  let fallbackIndex = 0;
+  return posts
+    .slice()
+    .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
+    .map((post) => {
+      const key = `${post.x}:${post.y}`;
+      const invalid = !Number.isFinite(post.x) || !Number.isFinite(post.y);
+      const duplicated = seen.has(key);
+      if (!invalid && !duplicated) {
+        seen.add(key);
+        return post;
+      }
+      let position = fallbackCanvasPosition(fallbackIndex);
+      while (seen.has(`${position.x}:${position.y}`)) {
+        fallbackIndex += 1;
+        position = fallbackCanvasPosition(fallbackIndex);
+      }
+      fallbackIndex += 1;
+      seen.add(`${position.x}:${position.y}`);
+      return { ...post, ...position };
+    })
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+};
 
 const toComment = (row: CommentRow): Comment => ({
   id: row.id,
@@ -163,8 +199,7 @@ export async function signUpWithPassword(email: string, password: string, profil
         location: profile?.location,
         website: profile?.website,
         avatar_url: profile?.avatarUrl,
-        banner_url: profile?.bannerUrl,
-        verified: true
+        banner_url: profile?.bannerUrl
       }
     }
   });
@@ -221,8 +256,7 @@ export async function ensureProfile(userId: string, email: string, profile?: Sig
       banner_url: profile?.bannerUrl || undefined,
       bio: profile?.bio || "New to CONNECT.",
       location: profile?.location || "",
-      website: profile?.website || "",
-      verified: true
+      website: profile?.website || ""
     })
     .select("*")
     .single();
@@ -272,7 +306,7 @@ export async function loadConnectData() {
 
   return {
     users: (profiles || []).map((row) => toUser(row as ProfileRow)),
-    posts: (posts || []).map((row) => toPost(row as PostRow)),
+    posts: ensureCanvasPositions((posts || []).map((row) => toPost(row as PostRow))),
     comments: (comments || []).map((row) => toComment(row as CommentRow)),
     reactions: (reactions || []).map((row) => toReaction(row as ReactionRow))
   };
@@ -303,13 +337,29 @@ export async function createPostReal(post: Post) {
 
 export async function reactToPostReal(postId: string, userId: string, type: "like" | "repost" | "bookmark") {
   const client = requireSupabase();
-  const { data, error } = await client.from("post_reactions").insert({ post_id: postId, user_id: userId, type }).select("*").single();
-  if (error?.message.includes("duplicate key")) return undefined;
-  if (error) throw error;
   const counter = type === "like" ? "likes_count" : type === "repost" ? "reposts_count" : "bookmarks_count";
-  const { error: counterError } = await client.rpc("increment_post_counter", { target_post_id: postId, counter_name: counter });
+  const { data: existing, error: existingError } = await client
+    .from("post_reactions")
+    .select("*")
+    .eq("post_id", postId)
+    .eq("user_id", userId)
+    .eq("type", type)
+    .maybeSingle();
+  if (existingError) throw existingError;
+
+  if (existing) {
+    const { error } = await client.from("post_reactions").delete().eq("post_id", postId).eq("user_id", userId).eq("type", type);
+    if (error) throw error;
+    const { error: counterError } = await client.rpc("adjust_post_counter", { target_post_id: postId, counter_name: counter, amount: -1 });
+    if (counterError) throw counterError;
+    return { reaction: toReaction(existing as ReactionRow), active: false };
+  }
+
+  const { data, error } = await client.from("post_reactions").insert({ post_id: postId, user_id: userId, type }).select("*").single();
+  if (error) throw error;
+  const { error: counterError } = await client.rpc("adjust_post_counter", { target_post_id: postId, counter_name: counter, amount: 1 });
   if (counterError) throw counterError;
-  return toReaction(data as ReactionRow);
+  return { reaction: toReaction(data as ReactionRow), active: true };
 }
 
 export async function addCommentReal(comment: Comment) {

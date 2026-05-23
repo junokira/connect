@@ -12,15 +12,25 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now(),
   followers_count integer not null default 0,
   following_count integer not null default 0,
-  verified boolean not null default true
+  verified boolean not null default false
 );
 
-alter table public.profiles
-  add column if not exists verified boolean not null default true;
+do $$
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'profiles'
+      and column_name = 'verified'
+  ) then
+    alter table public.profiles add column verified boolean not null default true;
+    update public.profiles set verified = true;
+  end if;
+end $$;
 
-update public.profiles
-set verified = true
-where verified is distinct from true;
+alter table public.profiles
+  alter column verified set default false;
 
 create table if not exists public.posts (
   id uuid primary key default gen_random_uuid(),
@@ -129,7 +139,7 @@ begin
   base_username := public.clean_connect_username(split_part(new.email, '@', 1));
   requested_username := public.available_connect_username(coalesce(nullif(new.raw_user_meta_data->>'username', ''), base_username), new.id);
 
-  insert into public.profiles (id, display_name, username, avatar_url, banner_url, bio, location, website, verified)
+  insert into public.profiles (id, display_name, username, avatar_url, banner_url, bio, location, website)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'display_name', base_username),
@@ -138,8 +148,7 @@ begin
     coalesce(nullif(new.raw_user_meta_data->>'banner_url', ''), 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80'),
     coalesce(nullif(new.raw_user_meta_data->>'bio', ''), 'New to CONNECT.'),
     coalesce(new.raw_user_meta_data->>'location', ''),
-    coalesce(new.raw_user_meta_data->>'website', ''),
-    true
+    coalesce(new.raw_user_meta_data->>'website', '')
   )
   on conflict (id) do nothing;
 
@@ -212,7 +221,7 @@ create policy "users follow as self" on public.follows for insert with check (au
 drop policy if exists "users unfollow as self" on public.follows;
 create policy "users unfollow as self" on public.follows for delete using (auth.uid() = follower_id);
 
-create or replace function public.increment_post_counter(target_post_id uuid, counter_name text)
+create or replace function public.adjust_post_counter(target_post_id uuid, counter_name text, amount integer)
 returns void
 language plpgsql
 security definer
@@ -225,45 +234,64 @@ begin
   if actor_id is null then
     raise exception 'Authentication required';
   end if;
+  if amount not in (-1, 1) then
+    raise exception 'Unsupported counter adjustment %', amount;
+  end if;
 
   if counter_name = 'likes_count' then
-    if not exists (
+    if amount = 1 and not exists (
       select 1 from public.post_reactions
       where post_id = target_post_id and user_id = actor_id and type = 'like'
     ) then
       raise exception 'A like reaction is required before incrementing likes_count';
     end if;
-    update public.posts set likes_count = likes_count + 1 where id = target_post_id;
+    update public.posts set likes_count = greatest(0, likes_count + amount) where id = target_post_id;
   elsif counter_name = 'comments_count' then
+    if amount = -1 then
+      raise exception 'Comments cannot be decremented through this function';
+    end if;
     if not exists (
       select 1 from public.comments
       where post_id = target_post_id and author_id = actor_id
     ) then
       raise exception 'A comment is required before incrementing comments_count';
     end if;
-    update public.posts set comments_count = comments_count + 1 where id = target_post_id;
+    update public.posts set comments_count = comments_count + amount where id = target_post_id;
   elsif counter_name = 'reposts_count' then
-    if not exists (
+    if amount = 1 and not exists (
       select 1 from public.post_reactions
       where post_id = target_post_id and user_id = actor_id and type = 'repost'
     ) then
       raise exception 'A repost reaction is required before incrementing reposts_count';
     end if;
-    update public.posts set reposts_count = reposts_count + 1 where id = target_post_id;
+    update public.posts set reposts_count = greatest(0, reposts_count + amount) where id = target_post_id;
   elsif counter_name = 'bookmarks_count' then
-    if not exists (
+    if amount = 1 and not exists (
       select 1 from public.post_reactions
       where post_id = target_post_id and user_id = actor_id and type = 'bookmark'
     ) then
       raise exception 'A bookmark reaction is required before incrementing bookmarks_count';
     end if;
-    update public.posts set bookmarks_count = bookmarks_count + 1 where id = target_post_id;
+    update public.posts set bookmarks_count = greatest(0, bookmarks_count + amount) where id = target_post_id;
   else
     raise exception 'Unsupported counter %', counter_name;
   end if;
 end;
 $$;
 
+create or replace function public.increment_post_counter(target_post_id uuid, counter_name text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.adjust_post_counter(target_post_id, counter_name, 1);
+end;
+$$;
+
+revoke execute on function public.adjust_post_counter(uuid, text, integer) from anon;
+grant execute on function public.adjust_post_counter(uuid, text, integer) to authenticated;
 revoke execute on function public.increment_post_counter(uuid, text) from anon;
 grant execute on function public.increment_post_counter(uuid, text) to authenticated;
 

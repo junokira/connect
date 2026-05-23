@@ -263,7 +263,23 @@ function AdjustPanel({
   );
 }
 
-function SearchView({ posts, users, onOpenPost, onOpenProfile }: { posts: ReturnType<typeof getFilteredPosts>; users: ReturnType<typeof useAppStore.getState>["users"]; onOpenPost: (id: string) => void; onOpenProfile: (id: string) => void }) {
+function SearchView({
+  posts,
+  users,
+  onOpenPost,
+  onOpenProfile,
+  onLikePost,
+  onRepostPost,
+  onBookmarkPost
+}: {
+  posts: ReturnType<typeof getFilteredPosts>;
+  users: ReturnType<typeof useAppStore.getState>["users"];
+  onOpenPost: (id: string) => void;
+  onOpenProfile: (id: string) => void;
+  onLikePost: (id: string) => void;
+  onRepostPost: (id: string) => void;
+  onBookmarkPost: (id: string) => void;
+}) {
   return (
     <main className="thin-scrollbar h-full overflow-y-auto px-4 pb-28 pt-20 lg:px-8">
       <div className="mx-auto max-w-5xl">
@@ -273,7 +289,7 @@ function SearchView({ posts, users, onOpenPost, onOpenProfile }: { posts: Return
         </div>
         <div className="grid justify-items-center gap-4 md:grid-cols-2 xl:grid-cols-3">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} author={users.find((user) => user.id === post.authorId) || users[0]} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(post.authorId)} onLike={() => undefined} onComment={() => onOpenPost(post.id)} onRepost={() => undefined} onBookmark={() => undefined} />
+            <PostCard key={post.id} post={post} author={users.find((user) => user.id === post.authorId) || users[0]} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(post.authorId)} onLike={() => onLikePost(post.id)} onComment={() => onOpenPost(post.id)} onRepost={() => onRepostPost(post.id)} onBookmark={() => onBookmarkPost(post.id)} />
           ))}
           {!posts.length ? <p className="rounded-3xl border border-dashed border-slate-300 p-8 text-sm text-slate-500 dark:border-white/15">Search posts, captions, usernames, hashtags, and media types.</p> : null}
         </div>
@@ -286,12 +302,18 @@ function ExploreView({
   posts,
   users,
   onOpenPost,
-  onOpenProfile
+  onOpenProfile,
+  onLikePost,
+  onRepostPost,
+  onBookmarkPost
 }: {
   posts: ReturnType<typeof getFilteredPosts>;
   users: ReturnType<typeof useAppStore.getState>["users"];
   onOpenPost: (id: string) => void;
   onOpenProfile: (id: string) => void;
+  onLikePost: (id: string) => void;
+  onRepostPost: (id: string) => void;
+  onBookmarkPost: (id: string) => void;
 }) {
   const trending = [...posts].sort((a, b) => b.likesCount + b.commentsCount * 2 + b.repostsCount * 3 - (a.likesCount + a.commentsCount * 2 + a.repostsCount * 3)).slice(0, 8);
   const media = posts.filter((post) => post.type !== "text").slice(0, 9);
@@ -315,10 +337,10 @@ function ExploreView({
                 emphasized
                 onOpen={() => onOpenPost(post.id)}
                 onProfile={() => onOpenProfile(post.authorId)}
-                onLike={() => undefined}
+                onLike={() => onLikePost(post.id)}
                 onComment={() => onOpenPost(post.id)}
-                onRepost={() => undefined}
-                onBookmark={() => undefined}
+                onRepost={() => onRepostPost(post.id)}
+                onBookmark={() => onBookmarkPost(post.id)}
               />
             ))}
           </div>
@@ -438,10 +460,12 @@ export default function App() {
 
   const currentUser = users.find((user) => user.id === currentUserId) || users[0];
   const filteredPosts = useMemo(() => getFilteredPosts(posts, users, sortMode, search), [posts, search, sortMode, users]);
+  const sortedCanvasPosts = useMemo(() => getFilteredPosts(posts, users, sortMode, ""), [posts, sortMode, users]);
+  const canvasPosts = sortedCanvasPosts.length || !posts.length ? sortedCanvasPosts : posts;
   const activePost = posts.find((post) => post.id === activePostId);
   const activeAuthor = activePost ? users.find((user) => user.id === activePost.authorId) : undefined;
   const activeProfile = users.find((user) => user.id === activeProfileId);
-  const latest = [...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  const latest = [...canvasPosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
   const zoomBy = (amount: number) => setCanvasView({ ...canvasView, zoom: Math.max(0.35, Math.min(2.2, canvasView.zoom + amount)) });
   const focusPost = useCallback((post = latest, zoom = 0.95) => {
     if (!post) return;
@@ -497,7 +521,7 @@ export default function App() {
 
         {activeView === "canvas" ? (
           <CanvasFeed
-            posts={filteredPosts}
+            posts={canvasPosts}
             users={users}
             sortMode={sortMode}
             feedStyle={feedStyle}
@@ -505,14 +529,15 @@ export default function App() {
             onViewChange={setCanvasView}
             onOpenPost={setActivePost}
             onOpenProfile={setActiveProfile}
+            onLatest={() => focusPost(latest, 0.95)}
             onLikePost={(id) => void likePost(id)}
             onRepostPost={(id) => void repostPost(id)}
             onBookmarkPost={(id) => void bookmarkPost(id)}
           />
         ) : activeView === "explore" ? (
-          <ExploreView posts={filteredPosts} users={users} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} />
+          <ExploreView posts={filteredPosts} users={users} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         ) : (
-          <SearchView posts={filteredPosts} users={users} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} />
+          <SearchView posts={filteredPosts} users={users} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         )}
       </div>
 
@@ -567,6 +592,9 @@ export default function App() {
         reactions={reactions}
         onClose={() => setActiveProfile(undefined)}
         onOpenPost={setActivePost}
+        onLikePost={(id) => void likePost(id)}
+        onRepostPost={(id) => void repostPost(id)}
+        onBookmarkPost={(id) => void bookmarkPost(id)}
         onUpdateProfile={updateProfile}
       />
     </div>
