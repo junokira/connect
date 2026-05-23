@@ -1,4 +1,3 @@
-import { SlidersHorizontal } from "lucide-react";
 import { PointerEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasView, FeedStyle, Post, SortMode, User } from "../types";
 import { PostCard } from "./PostCard";
@@ -8,12 +7,10 @@ type Props = {
   users: User[];
   sortMode: SortMode;
   feedStyle: FeedStyle;
-  search: string;
   view: CanvasView;
   onViewChange: (view: CanvasView) => void;
   onOpenPost: (id: string) => void;
   onOpenProfile: (id: string) => void;
-  onOpenFilters: () => void;
   onLikePost: (id: string) => void;
   onRepostPost: (id: string) => void;
   onBookmarkPost: (id: string) => void;
@@ -50,7 +47,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: typeOffset + column * 80 - 80, y: row * 330 - 220 };
 };
 
-export function CanvasFeed({ posts, users, sortMode, feedStyle, search, view, onViewChange, onOpenPost, onOpenProfile, onOpenFilters, onLikePost, onRepostPost, onBookmarkPost }: Props) {
+export function CanvasFeed({ posts, users, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView } | null>(null);
   const didDragRef = useRef(false);
@@ -95,9 +92,11 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, search, view, on
       const nextZoom = clampZoom(current.zoom * (delta > 0 ? 0.93 : 1.07));
       const mx = event.clientX - rect.left;
       const my = event.clientY - rect.top;
-      const worldX = (mx - current.x) / current.zoom;
-      const worldY = (my - current.y) / current.zoom;
-      scheduleView({ zoom: nextZoom, x: mx - worldX * nextZoom, y: my - worldY * nextZoom });
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const worldX = (mx - centerX - current.x) / current.zoom;
+      const worldY = (my - centerY - current.y) / current.zoom;
+      scheduleView({ zoom: nextZoom, x: mx - centerX - worldX * nextZoom, y: my - centerY - worldY * nextZoom });
     };
 
     node.addEventListener("wheel", handleWheel, { passive: false });
@@ -111,10 +110,12 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, search, view, on
 
   const visiblePosts = useMemo(() => {
     const padding = 640;
-    const minX = (-view.x - padding) / view.zoom;
-    const minY = (-view.y - padding) / view.zoom;
-    const maxX = (size.width - view.x + padding) / view.zoom;
-    const maxY = (size.height - view.y + padding) / view.zoom;
+    const centerX = size.width / 2;
+    const centerY = size.height / 2;
+    const minX = (-centerX - view.x - padding) / view.zoom;
+    const minY = (-centerY - view.y - padding) / view.zoom;
+    const maxX = (size.width - centerX - view.x + padding) / view.zoom;
+    const maxY = (size.height - centerY - view.y + padding) / view.zoom;
     return positionedPosts.filter(({ position }) => position.x > minX && position.x < maxX && position.y > minY && position.y < maxY);
   }, [positionedPosts, size.height, size.width, view]);
 
@@ -166,14 +167,10 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, search, view, on
       }}
     >
       <div className="canvas-dots absolute inset-0" style={{ backgroundPosition: `${view.x}px ${view.y}px`, backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px` }} />
-      <div className="pointer-events-none absolute left-4 top-4 z-20 rounded-2xl border border-slate-200 bg-white/86 px-4 py-3 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/86 lg:left-6">
-        <p className="text-sm font-bold">Canvas</p>
-        <p className="text-xs text-slate-500">{visiblePosts.length} visible · {feedStyle} · {sortMode} · {search || "all posts"}</p>
-      </div>
-      <button onClick={onOpenFilters} className="absolute right-4 top-4 z-20 grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/86 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/86 lg:hidden" aria-label="Open filters">
-        <SlidersHorizontal size={19} />
-      </button>
-      <div className="canvas-layer absolute left-0 top-0" style={{ transform: `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.zoom})` }}>
+      <div
+        className="canvas-layer absolute left-0 top-0"
+        style={{ transform: `translate3d(${size.width / 2 + view.x}px, ${size.height / 2 + view.y}px, 0) scale(${view.zoom})` }}
+      >
         {visiblePosts.map(({ post, position }) => {
           const author = users.find((user) => user.id === post.authorId)!;
           const emphasized = sortMode === "trending" || sortMode.startsWith("most");

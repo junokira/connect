@@ -1,6 +1,7 @@
-import { CalendarDays, Link as LinkIcon, Loader2, MapPin, Pencil, X } from "lucide-react";
+import { CalendarDays, ImagePlus, Link as LinkIcon, Loader2, MapPin, Pencil, Upload, X } from "lucide-react";
 import { FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
 import { Post, PostReaction, ProfileUpdate, User } from "../types";
+import { normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
 import { PostCard } from "./PostCard";
 
@@ -29,6 +30,28 @@ function EditProfileDialog({ user, onClose, onSave }: { user: User; onClose: () 
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [bannerPreview, setBannerPreview] = useState("");
+
+  useEffect(() => {
+    if (!form.avatarFile) {
+      setAvatarPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(form.avatarFile);
+    setAvatarPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [form.avatarFile]);
+
+  useEffect(() => {
+    if (!form.bannerFile) {
+      setBannerPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(form.bannerFile);
+    setBannerPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [form.bannerFile]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -39,6 +62,7 @@ function EditProfileDialog({ user, onClose, onSave }: { user: User; onClose: () 
   }, [onClose]);
 
   const update = (key: keyof ProfileUpdate, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const updateFile = (key: "avatarFile" | "bannerFile", file?: File) => setForm((current) => ({ ...current, [key]: file }));
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -66,15 +90,31 @@ function EditProfileDialog({ user, onClose, onSave }: { user: User; onClose: () 
 
   return (
     <div onMouseDown={onClose} className="fixed inset-0 z-[60] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <form onSubmit={submit} onMouseDown={stop} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl dark:bg-slate-950 sm:rounded-3xl">
+      <form onSubmit={submit} onMouseDown={stop} className="thin-scrollbar max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-lg font-black">Edit profile</p>
-            <p className="text-sm text-slate-500">Your username stays clean. A number is added only if it is taken.</p>
+            <p className="text-sm text-slate-500">Upload images, preview them, then save when it feels right.</p>
           </div>
           <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close edit profile">
             <X size={20} />
           </button>
+        </div>
+        <div className="relative mb-16">
+          <div className="h-36 overflow-hidden rounded-3xl bg-slate-100 dark:bg-white/10">
+            <img className="h-full w-full object-cover" src={bannerPreview || form.bannerUrl} alt="" />
+          </div>
+          <label className="absolute right-3 top-3 flex cursor-pointer items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-xs font-bold shadow-glass backdrop-blur dark:bg-slate-950/80">
+            <Upload size={14} /> Banner
+            <input className="sr-only" type="file" accept="image/*" onChange={(event) => updateFile("bannerFile", event.target.files?.[0])} />
+          </label>
+          <div className="absolute -bottom-12 left-5">
+            <img className="h-24 w-24 rounded-full border-4 border-white bg-white object-cover shadow-xl dark:border-[#0f1115] dark:bg-[#0f1115]" src={avatarPreview || form.avatarUrl} alt="" />
+            <label className="absolute bottom-1 right-1 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-slate-950 text-white shadow-lg dark:bg-white dark:text-slate-950">
+              <ImagePlus size={16} />
+              <input className="sr-only" type="file" accept="image/*" onChange={(event) => updateFile("avatarFile", event.target.files?.[0])} />
+            </label>
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label>
@@ -116,9 +156,29 @@ function EditProfileDialog({ user, onClose, onSave }: { user: User; onClose: () 
   );
 }
 
+function FullscreenMedia({ src, label, onClose }: { src: string; label: string; onClose: () => void }) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div onMouseDown={onClose} className="fixed inset-0 z-[70] grid place-items-center bg-black/88 p-4 backdrop-blur-sm">
+      <button onClick={onClose} className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white backdrop-blur" aria-label="Close image">
+        <X size={20} />
+      </button>
+      <img onMouseDown={(event) => event.stopPropagation()} className="max-h-[88dvh] max-w-[94vw] rounded-2xl object-contain shadow-2xl" src={src} alt={label} />
+    </div>
+  );
+}
+
 export function ProfileView({ user, currentUserId, users, posts, reactions, onClose, onOpenPost, onUpdateProfile }: Props) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Posts");
   const [editing, setEditing] = useState(false);
+  const [viewer, setViewer] = useState<{ src: string; label: string } | undefined>();
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -144,9 +204,10 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
   if (!user) return null;
   const isOwnProfile = user.id === currentUserId;
   const visiblePosts = activeTab === "Media" ? profileData.mediaPosts : activeTab === "Likes" ? profileData.likedPosts : profileData.userPosts;
+  const websiteUrl = user.website ? normalizeExternalUrl(user.website) : "";
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f7f7f4] text-slate-950 dark:bg-[#0e1116] dark:text-white">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
         <div>
           <p className="font-bold">{user.displayName}</p>
@@ -156,13 +217,17 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
           <X size={20} />
         </button>
       </header>
-      <div className="mx-auto max-w-6xl pb-24">
+      <div className="mx-auto max-w-5xl pb-24">
         <div className="relative h-44 overflow-hidden bg-slate-200 sm:h-64 dark:bg-white/10">
-          <img className="h-full w-full object-cover" src={user.bannerUrl} alt="" />
+          <button onClick={() => setViewer({ src: user.bannerUrl, label: `${user.displayName} banner` })} className="h-full w-full">
+            <img className="h-full w-full object-cover" src={user.bannerUrl} alt="" />
+          </button>
         </div>
         <section className="px-4 pb-6">
           <div className="-mt-12 flex flex-wrap items-end justify-between gap-4">
-            <img className="h-28 w-28 rounded-full border-4 border-white bg-white object-cover shadow-xl dark:border-slate-950 dark:bg-slate-950" src={user.avatarUrl} alt="" />
+            <button onClick={() => setViewer({ src: user.avatarUrl, label: `${user.displayName} avatar` })} className="rounded-full">
+              <img className="h-28 w-28 rounded-full border-4 border-[#f7f7f4] bg-white object-cover shadow-xl dark:border-[#0e1116] dark:bg-slate-950" src={user.avatarUrl} alt="" />
+            </button>
             {isOwnProfile ? (
               <button onClick={() => setEditing(true)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Edit profile</button>
             ) : (
@@ -175,7 +240,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
             <p className="mt-3 max-w-2xl whitespace-pre-wrap leading-7 text-slate-700 dark:text-slate-200">{user.bio}</p>
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500">
               {user.location ? <span className="flex items-center gap-1"><MapPin size={16} /> {user.location}</span> : null}
-              {user.website ? <span className="flex items-center gap-1"><LinkIcon size={16} /> {user.website}</span> : null}
+              {websiteUrl ? <a className="flex items-center gap-1 hover:text-slate-950 hover:underline dark:hover:text-white" href={websiteUrl} target="_blank" rel="noreferrer"><LinkIcon size={16} /> {user.website}</a> : null}
               <span className="flex items-center gap-1"><CalendarDays size={16} /> Joined {formatDate(user.createdAt)}</span>
             </div>
             <div className="mt-3 flex gap-5 text-sm">
@@ -208,10 +273,10 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
           </section>
         ) : null}
 
-        <section className="grid gap-6 px-4 py-6 lg:grid-cols-[1fr_360px]">
+        <section className="grid gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div>
             <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">{activeTab === "Media" ? "Media" : activeTab === "Likes" ? "Liked posts" : "Status feed"}</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="mx-auto grid max-w-[700px] gap-4 sm:grid-cols-2">
               {visiblePosts.map((post) => (
                 <div key={post.id} className="space-y-2">
                   {post.authorId !== user.id ? <p className="text-xs font-bold uppercase text-emerald-600 dark:text-emerald-300">Reposted by @{user.username}</p> : null}
@@ -255,6 +320,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
         </section>
       </div>
       {editing ? <EditProfileDialog user={user} onClose={() => setEditing(false)} onSave={onUpdateProfile} /> : null}
+      {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} onClose={() => setViewer(undefined)} /> : null}
     </div>
   );
 }

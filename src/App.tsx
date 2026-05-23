@@ -1,6 +1,5 @@
-import { Apple, Eye, LogIn, Mail, Moon, Phone, Search, SlidersHorizontal, Sun, UserPlus } from "lucide-react";
+import { Apple, Eye, EyeOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { CanvasControls } from "./components/CanvasControls";
 import { CanvasFeed } from "./components/CanvasFeed";
 import { Composer } from "./components/Composer";
 import { MobileNav } from "./components/MobileNav";
@@ -159,49 +158,126 @@ function AuthGate() {
   );
 }
 
-function FilterBar({ mobile = false, onClose }: { mobile?: boolean; onClose?: () => void }) {
+function SearchBox({ compact = false }: { compact?: boolean }) {
   const search = useAppStore((state) => state.search);
+  const setSearch = useAppStore((state) => state.setSearch);
+
+  return (
+    <label className="relative block">
+      <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+      <input
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        className={`h-11 w-full rounded-2xl border border-slate-200 bg-white/90 pl-10 pr-4 text-sm outline-none focus:border-slate-950 dark:border-white/10 dark:bg-slate-950/90 dark:focus:border-white ${compact ? "lg:w-80" : ""}`}
+        placeholder="Search CONNECT"
+      />
+    </label>
+  );
+}
+
+function AdjustPanel({
+  open,
+  onClose,
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onReset,
+  onLatest,
+  onHide,
+  theme,
+  onToggleTheme
+}: {
+  open: boolean;
+  onClose: () => void;
+  zoom: number;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onReset: () => void;
+  onLatest: () => void;
+  onHide: () => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
+}) {
   const sortMode = useAppStore((state) => state.sortMode);
   const feedStyle = useAppStore((state) => state.feedStyle);
-  const setSearch = useAppStore((state) => state.setSearch);
   const setSortMode = useAppStore((state) => state.setSortMode);
   const setFeedStyle = useAppStore((state) => state.setFeedStyle);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose, open]);
+
+  if (!open) return null;
+
   return (
-    <div className={mobile ? "space-y-4" : "hidden items-center gap-3 lg:flex"}>
-      <label className="relative block">
-        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          className="h-11 w-full rounded-2xl border border-slate-200 bg-white/90 pl-10 pr-4 text-sm outline-none focus:border-teal-500 dark:border-white/10 dark:bg-slate-950/90 lg:w-80"
-          placeholder="Search posts, people, #tags, type"
-        />
-      </label>
-      <select
-        value={sortMode}
-        onChange={(event) => setSortMode(event.target.value as SortMode)}
-        className="h-11 w-full rounded-2xl border border-slate-200 bg-white/90 px-3 text-sm font-medium outline-none focus:border-teal-500 dark:border-white/10 dark:bg-slate-950/90 lg:w-48"
-      >
-        {sortOptions.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-      <select
-        value={feedStyle}
-        onChange={(event) => setFeedStyle(event.target.value as FeedStyle)}
-        className="h-11 w-full rounded-2xl border border-slate-200 bg-white/90 px-3 text-sm font-medium outline-none focus:border-teal-500 dark:border-white/10 dark:bg-slate-950/90 lg:w-44"
-      >
-        {feedStyles.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-      {onClose ? (
-        <button onClick={onClose} className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white dark:bg-white dark:text-slate-950">
-          Apply
+    <div onMouseDown={onClose} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <section onMouseDown={(event) => event.stopPropagation()} className="w-full max-w-xl rounded-t-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <p className="text-lg font-black">Adjust</p>
+            <p className="text-sm text-slate-500">Tune the canvas without cluttering it.</p>
+          </div>
+          <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close adjust panel">
+            <X size={19} />
+          </button>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label>
+            <span className="mb-2 block text-sm font-semibold">Feed style</span>
+            <select value={feedStyle} onChange={(event) => setFeedStyle(event.target.value as FeedStyle)} className="h-12 w-full rounded-2xl border border-slate-200 bg-transparent px-3 text-sm font-medium outline-none dark:border-white/10">
+              {feedStyles.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className="mb-2 block text-sm font-semibold">Sort and filter</span>
+            <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} className="h-12 w-full rounded-2xl border border-slate-200 bg-transparent px-3 text-sm font-medium outline-none dark:border-white/10">
+              {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="mt-5 rounded-3xl bg-slate-100 p-3 dark:bg-white/10">
+          <div className="mb-3 flex items-center justify-between px-1">
+            <span className="text-sm font-bold">Canvas zoom</span>
+            <span className="text-sm font-semibold text-slate-500">{Math.round(zoom * 100)}%</span>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            <button onClick={onZoomOut} className="grid h-11 place-items-center rounded-2xl bg-white dark:bg-slate-950" aria-label="Zoom out"><Minus size={17} /></button>
+            <button onClick={onZoomIn} className="grid h-11 place-items-center rounded-2xl bg-white dark:bg-slate-950" aria-label="Zoom in"><Plus size={17} /></button>
+            <button onClick={onReset} className="grid h-11 place-items-center rounded-2xl bg-white dark:bg-slate-950" aria-label="Reset view"><Maximize2 size={17} /></button>
+            <button onClick={onLatest} className="grid h-11 place-items-center rounded-2xl bg-white dark:bg-slate-950" aria-label="Latest posts"><LocateFixed size={17} /></button>
+            <button onClick={onHide} className="grid h-11 place-items-center rounded-2xl bg-white dark:bg-slate-950" aria-label="Hide interface"><EyeOff size={17} /></button>
+          </div>
+        </div>
+        <button onClick={onToggleTheme} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-white/10">
+          {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+          {theme === "dark" ? "Light mode" : "Dark mode"}
         </button>
-      ) : null}
+      </section>
     </div>
+  );
+}
+
+function SearchView({ posts, users, onOpenPost, onOpenProfile }: { posts: ReturnType<typeof getFilteredPosts>; users: ReturnType<typeof useAppStore.getState>["users"]; onOpenPost: (id: string) => void; onOpenProfile: (id: string) => void }) {
+  return (
+    <main className="thin-scrollbar h-full overflow-y-auto px-4 pb-28 pt-20 lg:px-8">
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-6 max-w-2xl">
+          <h1 className="mb-3 text-3xl font-black">Search</h1>
+          <SearchBox />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {posts.map((post) => (
+            <PostCard key={post.id} post={post} author={users.find((user) => user.id === post.authorId) || users[0]} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(post.authorId)} onLike={() => undefined} onComment={() => onOpenPost(post.id)} onRepost={() => undefined} onBookmark={() => undefined} />
+          ))}
+          {!posts.length ? <p className="rounded-3xl border border-dashed border-slate-300 p-8 text-sm text-slate-500 dark:border-white/15">Search posts, captions, usernames, hashtags, and media types.</p> : null}
+        </div>
+      </div>
+    </main>
   );
 }
 
@@ -285,7 +361,6 @@ export default function App() {
     reactions,
     currentUserId,
     authed,
-    backendMode,
     loading,
     error,
     activePostId,
@@ -311,9 +386,9 @@ export default function App() {
   const refreshData = useAppStore((state) => state.refreshData);
 
   const [composerOpen, setComposerOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
   const [chromeHidden, setChromeHidden] = useState(false);
-  const [activeView, setActiveView] = useState<"canvas" | "explore">("canvas");
+  const [activeView, setActiveView] = useState<"canvas" | "explore" | "search">("canvas");
   const refreshTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -325,13 +400,13 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    if (!filtersOpen) return undefined;
+    if (!adjustOpen) return undefined;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setFiltersOpen(false);
+      if (event.key === "Escape") setAdjustOpen(false);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [filtersOpen]);
+  }, [adjustOpen]);
 
   useEffect(() => {
     if (!supabase || !authed) return undefined;
@@ -383,6 +458,7 @@ export default function App() {
           activeView={activeView}
           onHome={() => setActiveView("canvas")}
           onExplore={() => setActiveView("explore")}
+          onSearch={() => setActiveView("search")}
           onCreate={() => setComposerOpen(true)}
           onProfile={() => setActiveProfile(currentUser.id)}
           onSignOut={() => void signOut()}
@@ -390,15 +466,9 @@ export default function App() {
       ) : null}
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className={`fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 ${chromeHidden ? "" : "lg:left-72"}`}>
-          {!chromeHidden ? <FilterBar /> : null}
+          {!chromeHidden ? <div className="hidden lg:block"><SearchBox compact /></div> : null}
           {!chromeHidden && error ? <span className="hidden max-w-72 truncate rounded-2xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200 lg:block">{error}</span> : null}
-          {!chromeHidden ? <span className="hidden rounded-2xl border border-slate-200 bg-white/88 px-3 py-2 text-xs font-bold uppercase text-slate-500 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88 lg:block">
-            {backendMode}
-          </span> : null}
-          {!chromeHidden ? <button onClick={toggleTheme} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Toggle theme">
-            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-          </button> : null}
-          {!chromeHidden ? <button onClick={() => setFiltersOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88 lg:hidden" aria-label="Filters">
+          {!chromeHidden ? <button onClick={() => setAdjustOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Adjust canvas">
             <SlidersHorizontal size={18} />
           </button> : null}
           {chromeHidden ? (
@@ -414,28 +484,19 @@ export default function App() {
             users={users}
             sortMode={sortMode}
             feedStyle={feedStyle}
-            search={search}
             view={canvasView}
             onViewChange={setCanvasView}
             onOpenPost={setActivePost}
             onOpenProfile={setActiveProfile}
-            onOpenFilters={() => setFiltersOpen(true)}
             onLikePost={(id) => void likePost(id)}
             onRepostPost={(id) => void repostPost(id)}
             onBookmarkPost={(id) => void bookmarkPost(id)}
           />
-        ) : (
+        ) : activeView === "explore" ? (
           <ExploreView posts={filteredPosts} users={users} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} />
+        ) : (
+          <SearchView posts={filteredPosts} users={users} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} />
         )}
-
-        {!chromeHidden && activeView === "canvas" ? <CanvasControls
-          zoom={canvasView.zoom}
-          onZoomIn={() => zoomBy(0.12)}
-          onZoomOut={() => zoomBy(-0.12)}
-          onReset={() => setCanvasView({ x: 160, y: 120, zoom: 1 })}
-          onLatest={() => latest && setCanvasView({ x: -latest.x + 320, y: -latest.y + 200, zoom: 1 })}
-          onHide={() => setChromeHidden(true)}
-        /> : null}
       </div>
 
       {!chromeHidden ? (
@@ -444,19 +505,26 @@ export default function App() {
           onHome={() => setActiveView("canvas")}
           onExplore={() => setActiveView("explore")}
           onCreate={() => setComposerOpen(true)}
-          onFilters={() => setFiltersOpen(true)}
+          onSearch={() => setActiveView("search")}
           onProfile={() => setActiveProfile(currentUser.id)}
         />
       ) : null}
 
-      {filtersOpen ? (
-        <div onMouseDown={() => setFiltersOpen(false)} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm lg:hidden">
-          <section onMouseDown={(event) => event.stopPropagation()} className="w-full rounded-t-3xl bg-white p-5 shadow-2xl dark:bg-slate-950">
-            <div className="mb-4 h-1.5 w-12 rounded-full bg-slate-300 mx-auto dark:bg-white/20" />
-            <FilterBar mobile onClose={() => setFiltersOpen(false)} />
-          </section>
-        </div>
-      ) : null}
+      <AdjustPanel
+        open={adjustOpen}
+        onClose={() => setAdjustOpen(false)}
+        zoom={canvasView.zoom}
+        onZoomIn={() => zoomBy(0.12)}
+        onZoomOut={() => zoomBy(-0.12)}
+        onReset={() => setCanvasView({ x: 0, y: 0, zoom: 1 })}
+        onLatest={() => latest && setCanvasView({ x: -latest.x, y: -latest.y, zoom: 1 })}
+        onHide={() => {
+          setChromeHidden(true);
+          setAdjustOpen(false);
+        }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
 
       <Composer open={composerOpen} currentUser={currentUser} onClose={() => setComposerOpen(false)} onPublish={createPost} />
       <PostModal

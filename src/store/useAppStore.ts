@@ -113,7 +113,7 @@ export const useAppStore = create<AppState>()(
       sortMode: "newest",
       feedStyle: "classic",
       search: "",
-      canvasView: { x: 160, y: 120, zoom: 1 },
+      canvasView: { x: 0, y: 0, zoom: 1 },
       theme: "light",
       initialize: async () => {
         if (!isSupabaseConfigured) {
@@ -208,7 +208,11 @@ export const useAppStore = create<AppState>()(
       updateProfile: async (profile) => {
         const userId = get().currentUserId;
         if (!userId) throw new Error("You must be signed in to edit your profile.");
-        const updated = await updateProfileReal(userId, profile);
+        let avatarUrl = profile.avatarUrl;
+        let bannerUrl = profile.bannerUrl;
+        if (profile.avatarFile) avatarUrl = await uploadMediaReal(profile.avatarFile, userId, "profiles/avatar");
+        if (profile.bannerFile) bannerUrl = await uploadMediaReal(profile.bannerFile, userId, "profiles/banner");
+        const updated = await updateProfileReal(userId, { ...profile, avatarUrl, bannerUrl });
         set({
           users: get().users.map((user) => (user.id === userId ? updated : user)),
           activeProfileId: userId,
@@ -238,7 +242,7 @@ export const useAppStore = create<AppState>()(
         set({
           posts: [savedPost, ...get().posts],
           activePostId: savedPost.id,
-          canvasView: { x: -savedPost.x + 280, y: -savedPost.y + 180, zoom: 1 }
+          canvasView: { x: -savedPost.x, y: -savedPost.y, zoom: 1 }
         });
         return savedPost;
       },

@@ -1,6 +1,7 @@
 import { Image, Send, Upload, Video } from "lucide-react";
 import { FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
 import { PostType, User } from "../types";
+import { getVideoEmbedUrl, isDirectVideoUrl, normalizeExternalUrl } from "../utils/media";
 
 type Props = {
   open: boolean;
@@ -24,6 +25,8 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   const [error, setError] = useState("");
 
   const preview = useMemo(() => (type === "text" ? content : caption), [caption, content, type]);
+  const normalizedVideoUrl = type === "video" && videoUrl.trim() ? normalizeExternalUrl(videoUrl) : "";
+  const videoEmbedUrl = getVideoEmbedUrl(normalizedVideoUrl);
   const hasMedia = type === "photo" ? Boolean(mediaFile || imageUrl.trim()) : type === "video" ? Boolean(mediaFile || videoUrl.trim()) : true;
   const canPublish = type === "text" ? Boolean(content.trim()) : hasMedia;
 
@@ -71,7 +74,7 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
         content,
         caption,
         imageUrl: type === "photo" ? imageUrl.trim() : undefined,
-        videoUrl: type === "video" ? videoUrl.trim() : undefined,
+        videoUrl: type === "video" && videoUrl.trim() ? normalizeExternalUrl(videoUrl) : undefined,
         thumbnailUrl: type === "video" ? thumbnailUrl.trim() : undefined,
         mediaFile,
         thumbnailFile
@@ -175,8 +178,12 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
         <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
           {type === "photo" && (mediaPreview || imageUrl) ? <img className="max-h-[420px] w-full bg-slate-100 object-contain dark:bg-black" src={mediaPreview || imageUrl} alt="" /> : null}
           {type === "video" && mediaPreview ? <video className="max-h-[420px] w-full bg-black object-contain" src={mediaPreview} controls /> : null}
-          {type === "video" && !mediaPreview && videoUrl ? <video className="max-h-[420px] w-full bg-black object-contain" src={videoUrl} poster={thumbnailPreview || thumbnailUrl} controls /> : null}
-          {type === "video" && !mediaPreview && !videoUrl && (thumbnailPreview || thumbnailUrl) ? <img className="max-h-[420px] w-full bg-slate-100 object-contain dark:bg-black" src={thumbnailPreview || thumbnailUrl} alt="" /> : null}
+          {type === "video" && !mediaPreview && normalizedVideoUrl && isDirectVideoUrl(normalizedVideoUrl) ? <video className="max-h-[420px] w-full bg-black object-contain" src={normalizedVideoUrl} poster={thumbnailPreview || thumbnailUrl} controls /> : null}
+          {type === "video" && !mediaPreview && normalizedVideoUrl && videoEmbedUrl ? <iframe className="aspect-video w-full bg-black" src={videoEmbedUrl} title="External video preview" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /> : null}
+          {type === "video" && !mediaPreview && normalizedVideoUrl && !videoEmbedUrl && !isDirectVideoUrl(normalizedVideoUrl) ? (
+            <a className="block bg-slate-950 p-4 text-sm font-semibold text-white underline" href={normalizedVideoUrl} target="_blank" rel="noreferrer">Open external video</a>
+          ) : null}
+          {type === "video" && !mediaPreview && !normalizedVideoUrl && (thumbnailPreview || thumbnailUrl) ? <img className="max-h-[420px] w-full bg-slate-100 object-contain dark:bg-black" src={thumbnailPreview || thumbnailUrl} alt="" /> : null}
           <div className="p-4">
             <p className="mb-1 text-xs font-semibold uppercase text-slate-400">Draft preview</p>
             <p className="min-h-8 text-sm text-slate-700 dark:text-slate-200">{preview || (type === "text" ? "Your post preview will appear here." : "Media posts can publish with or without a caption.")}</p>

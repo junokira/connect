@@ -321,10 +321,10 @@ export async function addCommentReal(comment: Comment) {
   return toComment(data as CommentRow);
 }
 
-export async function uploadMediaReal(file: File, userId: string) {
+export async function uploadMediaReal(file: File, userId: string, folder = "posts") {
   const client = requireSupabase();
   const extension = file.name.split(".").pop() || "bin";
-  const path = `${userId}/${crypto.randomUUID()}.${extension}`;
+  const path = `${userId}/${folder}/${crypto.randomUUID()}.${extension}`;
   const { error } = await client.storage.from("connect-media").upload(path, file, {
     cacheControl: "3600",
     contentType: file.type,

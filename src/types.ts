@@ -32,6 +32,8 @@ export type ProfileUpdate = {
   username: string;
   avatarUrl: string;
   bannerUrl: string;
+  avatarFile?: File;
+  bannerFile?: File;
   bio: string;
   location: string;
   website: string;

@@ -1,6 +1,7 @@
 import { Bookmark, Heart, MessageCircle, Repeat2, Video } from "lucide-react";
 import { MouseEvent } from "react";
 import { Post, User } from "../types";
+import { getVideoEmbedUrl, isDirectVideoUrl } from "../utils/media";
 import { formatCount } from "../utils/posts";
 
 type Props = {
@@ -17,6 +18,8 @@ type Props = {
 
 export function PostCard({ post, author, emphasized, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
   const text = post.type === "text" ? post.content : post.caption;
+  const embedUrl = getVideoEmbedUrl(post.videoUrl);
+  const directVideo = isDirectVideoUrl(post.videoUrl);
   const action = (handler: () => void) => (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     handler();
@@ -54,8 +57,12 @@ export function PostCard({ post, author, emphasized, onOpen, onProfile, onLike, 
         <div className="relative max-h-72 bg-black">
           {post.thumbnailUrl ? (
             <img className="max-h-72 w-full object-contain" src={post.thumbnailUrl} alt="" loading="lazy" />
-          ) : (
+          ) : directVideo ? (
             <video className="max-h-72 w-full object-contain" src={post.videoUrl} muted preload="metadata" />
+          ) : embedUrl ? (
+            <div className="grid h-48 place-items-center bg-black text-sm font-semibold text-white/80">External video</div>
+          ) : (
+            <div className="grid h-48 place-items-center bg-black px-6 text-center text-sm font-semibold text-white/80">Open video link</div>
           )}
           <div className="absolute inset-0 grid place-items-center bg-black/20">
             <span className="grid h-12 w-12 place-items-center rounded-full bg-white/90 text-slate-950">

@@ -1,6 +1,7 @@
 import { Bookmark, Heart, Link, MessageCircle, Repeat2, Share2, X } from "lucide-react";
 import { FormEvent, MouseEvent, useEffect, useState } from "react";
 import { Comment, Post, User } from "../types";
+import { getVideoEmbedUrl, isDirectVideoUrl, normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
 
 type Props = {
@@ -30,6 +31,8 @@ export function PostModal({ post, author, currentUser, comments, users, onClose,
   if (!post || !author) return null;
   const text = post.type === "text" ? post.content : post.caption;
   const postUrl = `${window.location.origin}?post=${post.id}`;
+  const videoUrl = post.videoUrl ? normalizeExternalUrl(post.videoUrl) : "";
+  const embedUrl = getVideoEmbedUrl(videoUrl);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -66,7 +69,13 @@ export function PostModal({ post, author, currentUser, comments, users, onClose,
         </header>
 
         {post.type === "photo" && post.imageUrl ? <img className="max-h-[62vh] w-full object-contain bg-slate-100 dark:bg-black" src={post.imageUrl} alt="" /> : null}
-        {post.type === "video" && post.videoUrl ? <video className="max-h-[62vh] w-full bg-black" src={post.videoUrl} poster={post.thumbnailUrl} controls /> : null}
+        {post.type === "video" && videoUrl && isDirectVideoUrl(videoUrl) ? <video className="max-h-[62vh] w-full bg-black object-contain" src={videoUrl} poster={post.thumbnailUrl} controls /> : null}
+        {post.type === "video" && videoUrl && embedUrl ? <iframe className="aspect-video max-h-[62vh] w-full bg-black" src={embedUrl} title="Video post" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /> : null}
+        {post.type === "video" && videoUrl && !embedUrl && !isDirectVideoUrl(videoUrl) ? (
+          <div className="bg-slate-950 p-5 text-center">
+            <a className="font-semibold text-white underline" href={videoUrl} target="_blank" rel="noreferrer">Open external video</a>
+          </div>
+        ) : null}
 
         <div className="grid gap-6 p-5 lg:grid-cols-[1fr_320px]">
           <div>
