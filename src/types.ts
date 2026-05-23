@@ -47,6 +47,12 @@ export type PostReaction = {
   createdAt: string;
 };
 
+export type Follow = {
+  followerId: string;
+  followingId: string;
+  createdAt: string;
+};
+
 export type SignupProfile = {
   displayName: string;
   username: string;

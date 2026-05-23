@@ -38,6 +38,7 @@ function AuthGate() {
   const signIn = useAppStore((state) => state.signIn);
   const signUp = useAppStore((state) => state.signUp);
   const requestMagicLink = useAppStore((state) => state.requestMagicLink);
+  const requestPasswordReset = useAppStore((state) => state.requestPasswordReset);
   const requestPhoneOtp = useAppStore((state) => state.requestPhoneOtp);
   const signInWithSocialProvider = useAppStore((state) => state.signInWithSocialProvider);
   const loading = useAppStore((state) => state.loading);
@@ -94,6 +95,16 @@ function AuthGate() {
     }
   };
 
+  const resetPassword = async () => {
+    setStatus("");
+    try {
+      await requestPasswordReset(email);
+      setStatus("Password reset sent. Open the email, then set a new password in CONNECT.");
+    } catch {
+      setStatus("");
+    }
+  };
+
   return (
     <main className="h-[100dvh] overflow-y-auto bg-[#f5f5f7] p-4 dark:bg-[#050505]">
       <form onSubmit={submit} className="mx-auto my-4 w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-glass dark:border-white/10 dark:bg-slate-950 sm:my-10">
@@ -139,6 +150,11 @@ function AuthGate() {
           {mode === "signup" ? <UserPlus size={18} /> : <LogIn size={18} />}
           {loading ? "Connecting..." : mode === "signup" ? "Create account" : "Sign in"}
         </button>
+        {mode === "signin" ? (
+          <button type="button" disabled={!email || loading} onClick={() => void resetPassword()} className="mt-3 w-full text-center text-sm font-bold text-[#007aff] disabled:opacity-50">
+            Forgot password?
+          </button>
+        ) : null}
         <div className="my-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-xs font-bold uppercase text-slate-400">
           <span className="h-px bg-slate-200 dark:bg-white/10" /> Or <span className="h-px bg-slate-200 dark:bg-white/10" />
         </div>
@@ -269,6 +285,7 @@ function AdjustPanel({
 function SearchView({
   posts,
   users,
+  reactionState,
   onOpenPost,
   onOpenProfile,
   onLikePost,
@@ -277,6 +294,7 @@ function SearchView({
 }: {
   posts: ReturnType<typeof getFilteredPosts>;
   users: ReturnType<typeof useAppStore.getState>["users"];
+  reactionState: (postId: string) => { liked: boolean; reposted: boolean; bookmarked: boolean };
   onOpenPost: (id: string) => void;
   onOpenProfile: (id: string) => void;
   onLikePost: (id: string) => void;
@@ -292,7 +310,7 @@ function SearchView({
         </div>
         <div className="grid justify-items-center gap-4 md:grid-cols-2 xl:grid-cols-3">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} author={users.find((user) => user.id === post.authorId) || users[0]} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(post.authorId)} onLike={() => onLikePost(post.id)} onComment={() => onOpenPost(post.id)} onRepost={() => onRepostPost(post.id)} onBookmark={() => onBookmarkPost(post.id)} />
+            <PostCard key={post.id} post={post} author={users.find((user) => user.id === post.authorId) || users[0]} {...reactionState(post.id)} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(post.authorId)} onLike={() => onLikePost(post.id)} onComment={() => onOpenPost(post.id)} onRepost={() => onRepostPost(post.id)} onBookmark={() => onBookmarkPost(post.id)} />
           ))}
           {!posts.length ? <p className="rounded-3xl border border-dashed border-slate-300 p-8 text-sm text-slate-500 dark:border-white/15">Search posts, captions, usernames, hashtags, and media types.</p> : null}
         </div>
@@ -304,6 +322,7 @@ function SearchView({
 function ExploreView({
   posts,
   users,
+  reactionState,
   onOpenPost,
   onOpenProfile,
   onLikePost,
@@ -312,6 +331,7 @@ function ExploreView({
 }: {
   posts: ReturnType<typeof getFilteredPosts>;
   users: ReturnType<typeof useAppStore.getState>["users"];
+  reactionState: (postId: string) => { liked: boolean; reposted: boolean; bookmarked: boolean };
   onOpenPost: (id: string) => void;
   onOpenProfile: (id: string) => void;
   onLikePost: (id: string) => void;
@@ -338,6 +358,7 @@ function ExploreView({
                 post={post}
                 author={users.find((user) => user.id === post.authorId) || users[0]}
                 emphasized
+                {...reactionState(post.id)}
                 onOpen={() => onOpenPost(post.id)}
                 onProfile={() => onOpenProfile(post.authorId)}
                 onLike={() => onLikePost(post.id)}
@@ -388,6 +409,7 @@ export default function App() {
     posts,
     comments,
     reactions,
+    follows,
     currentUserId,
     authed,
     loading,
@@ -407,7 +429,9 @@ export default function App() {
     repostPost,
     bookmarkPost,
     addComment,
+    followUser,
     updateProfile,
+    updatePassword,
     signOut,
     toggleTheme
   } = useAppStore();
@@ -453,6 +477,7 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "post_reactions" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "follows" }, scheduleRefresh)
       .subscribe();
 
     return () => {
@@ -469,6 +494,11 @@ export default function App() {
   const activeAuthor = activePost ? users.find((user) => user.id === activePost.authorId) : undefined;
   const activeProfile = users.find((user) => user.id === activeProfileId);
   const latest = [...canvasPosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  const reactionState = (postId: string) => ({
+    liked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "like"),
+    reposted: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "repost"),
+    bookmarked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "bookmark")
+  });
   const zoomBy = (amount: number) => setCanvasView({ ...canvasView, zoom: Math.max(0.35, Math.min(2.2, canvasView.zoom + amount)) });
   const focusPost = useCallback((post = latest, zoom = 0.95) => {
     if (!post) return;
@@ -526,6 +556,8 @@ export default function App() {
           <CanvasFeed
             posts={canvasPosts}
             users={users}
+            reactions={reactions}
+            currentUserId={currentUserId}
             sortMode={sortMode}
             feedStyle={feedStyle}
             view={canvasView}
@@ -538,9 +570,9 @@ export default function App() {
             onBookmarkPost={(id) => void bookmarkPost(id)}
           />
         ) : activeView === "explore" ? (
-          <ExploreView posts={filteredPosts} users={users} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
+          <ExploreView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         ) : (
-          <SearchView posts={filteredPosts} users={users} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
+          <SearchView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         )}
       </div>
 
@@ -582,6 +614,9 @@ export default function App() {
         users={users}
         comments={comments.filter((comment) => comment.postId === activePostId)}
         onClose={() => setActivePost(undefined)}
+        liked={activePost ? reactionState(activePost.id).liked : false}
+        reposted={activePost ? reactionState(activePost.id).reposted : false}
+        bookmarked={activePost ? reactionState(activePost.id).bookmarked : false}
         onLike={() => activePost && likePost(activePost.id)}
         onRepost={() => activePost && repostPost(activePost.id)}
         onBookmark={() => activePost && bookmarkPost(activePost.id)}
@@ -593,12 +628,15 @@ export default function App() {
         users={users}
         posts={posts}
         reactions={reactions}
+        follows={follows}
         onClose={() => setActiveProfile(undefined)}
         onOpenPost={setActivePost}
         onLikePost={(id) => void likePost(id)}
         onRepostPost={(id) => void repostPost(id)}
         onBookmarkPost={(id) => void bookmarkPost(id)}
+        onFollowUser={(id) => void followUser(id)}
         onUpdateProfile={updateProfile}
+        onUpdatePassword={updatePassword}
       />
     </div>
   );

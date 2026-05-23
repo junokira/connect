@@ -9,15 +9,18 @@ import {
   loadConnectData,
   reactToPostReal,
   sendMagicLink,
+  sendPasswordReset,
   sendPhoneOtp,
   signInWithPassword,
   signInWithProvider,
   signOutReal,
   signUpWithPassword,
+  toggleFollowReal,
+  updatePasswordReal,
   updateProfileReal,
   uploadMediaReal
 } from "../lib/supabaseData";
-import { CanvasView, Comment, FeedStyle, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, SortMode, User } from "../types";
+import { CanvasView, Comment, FeedStyle, Follow, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, SortMode, User } from "../types";
 import { placeNextPost } from "../utils/placement";
 
 type DraftInput = {
@@ -36,6 +39,7 @@ type AppState = {
   posts: Post[];
   comments: Comment[];
   reactions: PostReaction[];
+  follows: Follow[];
   currentUserId: string;
   authed: boolean;
   backendMode: "supabase";
@@ -53,6 +57,8 @@ type AppState = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, profile: SignupProfile) => Promise<boolean>;
   requestMagicLink: (email: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
   requestPhoneOtp: (phone: string) => Promise<void>;
   signInWithSocialProvider: (provider: "google" | "apple") => Promise<void>;
   updateProfile: (profile: ProfileUpdate) => Promise<void>;
@@ -68,6 +74,7 @@ type AppState = {
   repostPost: (id: string) => Promise<void>;
   bookmarkPost: (id: string) => Promise<void>;
   addComment: (postId: string, content: string) => Promise<void>;
+  followUser: (id: string) => Promise<void>;
   toggleTheme: () => void;
 };
 
@@ -104,6 +111,7 @@ export const useAppStore = create<AppState>()(
       posts: [],
       comments: [],
       reactions: [],
+      follows: [],
       currentUserId: "",
       authed: false,
       backendMode: "supabase",
@@ -189,6 +197,21 @@ export const useAppStore = create<AppState>()(
           set({ error: error instanceof Error ? error.message : "Could not send a magic link.", loading: false });
           throw error;
         }
+      },
+      requestPasswordReset: async (email) => {
+        try {
+          set({ loading: true, error: undefined });
+          await sendPasswordReset(email);
+          set({ loading: false, error: undefined });
+        } catch (error) {
+          set({ error: error instanceof Error ? error.message : "Could not send password reset email.", loading: false });
+          throw error;
+        }
+      },
+      updatePassword: async (password) => {
+        if (!get().currentUserId) throw new Error("You must be signed in to set a password.");
+        await updatePasswordReal(password);
+        set({ error: undefined });
       },
       requestPhoneOtp: async (phone) => {
         try {
@@ -346,6 +369,39 @@ export const useAppStore = create<AppState>()(
           comments: [savedComment, ...get().comments],
           posts: get().posts.map((post) => (post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post))
         });
+      },
+      followUser: async (id) => {
+        const userId = get().currentUserId;
+        if (!userId) throw new Error("You must be signed in to follow people.");
+        if (userId === id) throw new Error("You cannot follow yourself.");
+        const existing = get().follows.find((follow) => follow.followerId === userId && follow.followingId === id);
+        const optimisticFollow: Follow = existing || { followerId: userId, followingId: id, createdAt: new Date().toISOString() };
+        set({
+          follows: existing ? get().follows.filter((follow) => !(follow.followerId === userId && follow.followingId === id)) : [optimisticFollow, ...get().follows],
+          users: get().users.map((user) => {
+            if (user.id === id) return { ...user, followersCount: Math.max(0, user.followersCount + (existing ? -1 : 1)) };
+            if (user.id === userId) return { ...user, followingCount: Math.max(0, user.followingCount + (existing ? -1 : 1)) };
+            return user;
+          }),
+          error: undefined
+        });
+        try {
+          const result = await toggleFollowReal(userId, id);
+          set({
+            follows: result.active ? [result.follow, ...get().follows.filter((follow) => !(follow.followerId === userId && follow.followingId === id))] : get().follows.filter((follow) => !(follow.followerId === userId && follow.followingId === id)),
+            error: undefined
+          });
+        } catch (error) {
+          set({
+            follows: existing ? [existing, ...get().follows.filter((follow) => !(follow.followerId === userId && follow.followingId === id))] : get().follows.filter((follow) => !(follow.followerId === userId && follow.followingId === id)),
+            users: get().users.map((user) => {
+              if (user.id === id) return { ...user, followersCount: Math.max(0, user.followersCount + (existing ? 1 : -1)) };
+              if (user.id === userId) return { ...user, followingCount: Math.max(0, user.followingCount + (existing ? 1 : -1)) };
+              return user;
+            }),
+            error: error instanceof Error ? error.message : "Could not update follow."
+          });
+        }
       },
       toggleTheme: () => set({ theme: get().theme === "light" ? "dark" : "light" })
     }),

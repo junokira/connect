@@ -1,6 +1,6 @@
 import { CalendarDays, ImagePlus, Link as LinkIcon, Loader2, MapPin, Pencil, Upload, X } from "lucide-react";
 import { FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
-import { Post, PostReaction, ProfileUpdate, User } from "../types";
+import { Follow, Post, PostReaction, ProfileUpdate, User } from "../types";
 import { normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
 import { PostCard } from "./PostCard";
@@ -12,17 +12,20 @@ type Props = {
   users: User[];
   posts: Post[];
   reactions: PostReaction[];
+  follows: Follow[];
   onClose: () => void;
   onOpenPost: (id: string) => void;
   onLikePost: (id: string) => void;
   onRepostPost: (id: string) => void;
   onBookmarkPost: (id: string) => void;
+  onFollowUser: (id: string) => void;
   onUpdateProfile: (profile: ProfileUpdate) => Promise<void>;
+  onUpdatePassword: (password: string) => Promise<void>;
 };
 
 const tabs = ["Posts", "Replies", "Media", "Likes"] as const;
 
-function EditProfileDialog({ user, onClose, onSave }: { user: User; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void> }) {
+function EditProfileDialog({ user, onClose, onSave, onUpdatePassword }: { user: User; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void> }) {
   const [form, setForm] = useState<ProfileUpdate>({
     displayName: user.displayName,
     username: user.username,
@@ -36,6 +39,8 @@ function EditProfileDialog({ user, onClose, onSave }: { user: User; onClose: () 
   const [error, setError] = useState("");
   const [avatarPreview, setAvatarPreview] = useState("");
   const [bannerPreview, setBannerPreview] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordStatus, setPasswordStatus] = useState("");
 
   useEffect(() => {
     if (!form.avatarFile) {
@@ -85,6 +90,24 @@ function EditProfileDialog({ user, onClose, onSave }: { user: User; onClose: () 
       onClose();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Could not save your profile.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const savePassword = async () => {
+    if (newPassword.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError("");
+      await onUpdatePassword(newPassword);
+      setNewPassword("");
+      setPasswordStatus("Password updated.");
+    } catch (passwordError) {
+      setError(passwordError instanceof Error ? passwordError.message : "Could not update password.");
     } finally {
       setSaving(false);
     }
@@ -150,6 +173,15 @@ function EditProfileDialog({ user, onClose, onSave }: { user: User; onClose: () 
           <span className="mb-2 block text-sm font-semibold">Bio</span>
           <textarea value={form.bio} onChange={(event) => update("bio", event.target.value)} className="min-h-28 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
         </label>
+        <div className="mt-4 rounded-2xl border border-slate-200 p-4 dark:border-white/10">
+          <p className="text-sm font-bold">Password</p>
+          <p className="mt-1 text-sm text-slate-500">Set or change your password after signing in with magic link.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+            <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="New password" />
+            <button type="button" disabled={saving || newPassword.length < 8} onClick={() => void savePassword()} className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">Set password</button>
+          </div>
+          {passwordStatus ? <p className="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-300">{passwordStatus}</p> : null}
+        </div>
         {error ? <p className="mt-4 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
         <button disabled={saving} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">
           {saving ? <Loader2 className="animate-spin" size={17} /> : <Pencil size={17} />}
@@ -179,7 +211,7 @@ function FullscreenMedia({ src, label, onClose }: { src: string; label: string; 
   );
 }
 
-export function ProfileView({ user, currentUserId, users, posts, reactions, onClose, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onUpdateProfile }: Props) {
+export function ProfileView({ user, currentUserId, users, posts, reactions, follows, onClose, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword }: Props) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Posts");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string } | undefined>();
@@ -207,6 +239,12 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
 
   if (!user) return null;
   const isOwnProfile = user.id === currentUserId;
+  const isFollowing = follows.some((follow) => follow.followerId === currentUserId && follow.followingId === user.id);
+  const reactionState = (postId: string) => ({
+    liked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "like"),
+    reposted: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "repost"),
+    bookmarked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "bookmark")
+  });
   const visiblePosts = activeTab === "Media" ? profileData.mediaPosts : activeTab === "Likes" ? profileData.likedPosts : profileData.userPosts;
   const websiteUrl = user.website ? normalizeExternalUrl(user.website) : "";
 
@@ -238,7 +276,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
             {isOwnProfile ? (
               <button onClick={() => setEditing(true)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Edit profile</button>
             ) : (
-              <button className="rounded-full bg-slate-950 px-5 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">Follow</button>
+              <button onClick={() => onFollowUser(user.id)} className={`rounded-full px-5 py-2 text-sm font-bold ${isFollowing ? "border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" : "bg-slate-950 text-white dark:bg-white dark:text-slate-950"}`}>{isFollowing ? "Following" : "Follow"}</button>
             )}
           </div>
           <div className="mt-4">
@@ -273,6 +311,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
               post={profileData.pinned}
               author={user}
               emphasized
+              {...reactionState(profileData.pinned.id)}
               onOpen={() => onOpenPost(profileData.pinned?.id || "")}
               onProfile={() => undefined}
               onLike={() => onLikePost(profileData.pinned?.id || "")}
@@ -293,6 +332,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
                   <PostCard
                     post={post}
                     author={users.find((candidate) => candidate.id === post.authorId) || user}
+                    {...reactionState(post.id)}
                     onOpen={() => onOpenPost(post.id)}
                     onProfile={() => undefined}
                     onLike={() => onLikePost(post.id)}
@@ -332,7 +372,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, onCl
           </aside>
         </section>
       </div>
-      {editing ? <EditProfileDialog user={user} onClose={() => setEditing(false)} onSave={onUpdateProfile} /> : null}
+      {editing ? <EditProfileDialog user={user} onClose={() => setEditing(false)} onSave={onUpdateProfile} onUpdatePassword={onUpdatePassword} /> : null}
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} onClose={() => setViewer(undefined)} /> : null}
     </div>
   );

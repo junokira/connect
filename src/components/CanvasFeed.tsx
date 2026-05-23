@@ -1,11 +1,13 @@
 import { LocateFixed } from "lucide-react";
 import { PointerEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CanvasView, FeedStyle, Post, SortMode, User } from "../types";
+import { CanvasView, FeedStyle, Post, PostReaction, SortMode, User } from "../types";
 import { PostCard } from "./PostCard";
 
 type Props = {
   posts: Post[];
   users: User[];
+  reactions: PostReaction[];
+  currentUserId: string;
   sortMode: SortMode;
   feedStyle: FeedStyle;
   view: CanvasView;
@@ -49,7 +51,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: typeOffset + column * 80 - 80, y: row * 330 - 220 };
 };
 
-export function CanvasFeed({ posts, users, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLatest, onLikePost, onRepostPost, onBookmarkPost }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLatest, onLikePost, onRepostPost, onBookmarkPost }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView } | null>(null);
   const didDragRef = useRef(false);
@@ -213,6 +215,9 @@ export function CanvasFeed({ posts, users, sortMode, feedStyle, view, onViewChan
                 post={post}
                 author={author}
                 emphasized={emphasized}
+                liked={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "like")}
+                reposted={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "repost")}
+                bookmarked={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "bookmark")}
                 onOpen={() => onOpenPost(post.id)}
                 onProfile={() => onOpenProfile(author.id)}
                 onLike={() => onLikePost(post.id)}

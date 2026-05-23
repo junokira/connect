@@ -12,13 +12,16 @@ type Props = {
   comments: Comment[];
   users: User[];
   onClose: () => void;
+  liked?: boolean;
+  reposted?: boolean;
+  bookmarked?: boolean;
   onLike: () => void;
   onRepost: () => void;
   onBookmark: () => void;
   onComment: (content: string) => void;
 };
 
-export function PostModal({ post, author, currentUser, comments, users, onClose, onLike, onRepost, onBookmark, onComment }: Props) {
+export function PostModal({ post, author, currentUser, comments, users, onClose, liked, reposted, bookmarked, onLike, onRepost, onBookmark, onComment }: Props) {
   const [comment, setComment] = useState("");
   const [shareStatus, setShareStatus] = useState("");
   useEffect(() => {
@@ -92,17 +95,17 @@ export function PostModal({ post, author, currentUser, comments, users, onClose,
               ))}
             </div>
             <div className="mt-6 grid grid-cols-5 gap-2">
-              <button type="button" onClick={onLike} className="rounded-xl border border-slate-200 p-3 hover:bg-rose-50 dark:border-white/10 dark:hover:bg-rose-400/10">
-                <Heart className="mx-auto mb-1" size={18} /> <span className="text-xs">{formatCount(post.likesCount)}</span>
+              <button type="button" onClick={onLike} className={`rounded-xl border border-slate-200 p-3 hover:bg-rose-50 dark:border-white/10 dark:hover:bg-rose-400/10 ${liked ? "text-rose-600" : ""}`}>
+                <Heart className="mx-auto mb-1" size={18} fill={liked ? "currentColor" : "none"} /> <span className="text-xs">{formatCount(post.likesCount)}</span>
               </button>
               <button type="button" className="rounded-xl border border-slate-200 p-3 dark:border-white/10">
                 <MessageCircle className="mx-auto mb-1" size={18} /> <span className="text-xs">{formatCount(post.commentsCount)}</span>
               </button>
-              <button type="button" onClick={onRepost} className="rounded-xl border border-slate-200 p-3 hover:bg-emerald-50 dark:border-white/10 dark:hover:bg-emerald-400/10">
+              <button type="button" onClick={onRepost} className={`rounded-xl border border-slate-200 p-3 hover:bg-emerald-50 dark:border-white/10 dark:hover:bg-emerald-400/10 ${reposted ? "text-emerald-600" : ""}`}>
                 <Repeat2 className="mx-auto mb-1" size={18} /> <span className="text-xs">{formatCount(post.repostsCount)}</span>
               </button>
-              <button type="button" onClick={onBookmark} className="rounded-xl border border-slate-200 p-3 hover:bg-amber-50 dark:border-white/10 dark:hover:bg-amber-400/10">
-                <Bookmark className="mx-auto mb-1" size={18} /> <span className="text-xs">{formatCount(post.bookmarksCount)}</span>
+              <button type="button" onClick={onBookmark} className={`rounded-xl border border-slate-200 p-3 hover:bg-amber-50 dark:border-white/10 dark:hover:bg-amber-400/10 ${bookmarked ? "text-amber-600" : ""}`}>
+                <Bookmark className="mx-auto mb-1" size={18} fill={bookmarked ? "currentColor" : "none"} /> <span className="text-xs">{formatCount(post.bookmarksCount)}</span>
               </button>
               <button type="button" onClick={() => void share()} className="rounded-xl border border-slate-200 p-3 dark:border-white/10">
                 <Share2 className="mx-auto mb-1" size={18} /> <span className="text-xs">Share</span>

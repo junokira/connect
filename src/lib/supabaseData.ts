@@ -1,4 +1,4 @@
-import { Comment, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, User } from "../types";
+import { Comment, Follow, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, User } from "../types";
 import { supabase } from "./supabase";
 
 type ProfileRow = {
@@ -49,6 +49,12 @@ type ReactionRow = {
   post_id: string;
   user_id: string;
   type: "like" | "repost" | "bookmark";
+  created_at: string;
+};
+
+type FollowRow = {
+  follower_id: string;
+  following_id: string;
   created_at: string;
 };
 
@@ -139,12 +145,18 @@ const toReaction = (row: ReactionRow): PostReaction => ({
   createdAt: row.created_at
 });
 
+const toFollow = (row: FollowRow): Follow => ({
+  followerId: row.follower_id,
+  followingId: row.following_id,
+  createdAt: row.created_at
+});
+
 function requireSupabase() {
   if (!supabase) throw new Error("Supabase is not configured.");
   return supabase;
 }
 
-function authRedirectUrl(mode: "confirmed" | "magic" = "confirmed") {
+function authRedirectUrl(mode: "confirmed" | "magic" | "reset" = "confirmed") {
   const origin = typeof window === "undefined" ? "https://connect-one-kappa.vercel.app" : window.location.origin;
   return `${origin}/?auth=${mode}`;
 }
@@ -222,13 +234,28 @@ export async function completeAuthRedirect() {
 export async function signInWithPassword(email: string, password: string) {
   const client = requireSupabase();
   const { data, error } = await client.auth.signInWithPassword({ email, password });
-  if (error) throw error;
+  if (error) {
+    if (/invalid login credentials/i.test(error.message)) {
+      throw new Error("Email or password is incorrect. If you joined with a magic link, use Forgot password to set a password.");
+    }
+    throw error;
+  }
   if (!data.user) throw new Error("Supabase did not return a user.");
   return data.user.id;
 }
 
+export async function emailAlreadyRegistered(email: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("connect_email_registered", { target_email: email.trim().toLowerCase() });
+  if (error) return false;
+  return Boolean(data);
+}
+
 export async function signUpWithPassword(email: string, password: string, profile: SignupProfile) {
   const client = requireSupabase();
+  if (await emailAlreadyRegistered(email)) {
+    throw new Error("An account with this email already exists. Sign in instead.");
+  }
   const username = await resolveAvailableUsername(profile.username || email.split("@")[0]);
 
   const { data: signUpData, error: signUpError } = await client.auth.signUp({
@@ -252,6 +279,18 @@ export async function signUpWithPassword(email: string, password: string, profil
   if (!signUpData.session) return { userId: signUpData.user.id, sessionReady: false };
   await ensureProfile(signUpData.user.id, email, { ...profile, username });
   return { userId: signUpData.user.id, sessionReady: true };
+}
+
+export async function sendPasswordReset(email: string) {
+  const client = requireSupabase();
+  const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl("reset") });
+  if (error) throw error;
+}
+
+export async function updatePasswordReal(password: string) {
+  const client = requireSupabase();
+  const { error } = await client.auth.updateUser({ password });
+  if (error) throw error;
 }
 
 export async function sendMagicLink(email: string) {
@@ -335,24 +374,28 @@ export async function loadConnectData() {
     { data: profiles, error: profilesError },
     { data: posts, error: postsError },
     { data: comments, error: commentsError },
-    { data: reactions, error: reactionsError }
+    { data: reactions, error: reactionsError },
+    { data: follows, error: followsError }
   ] = await Promise.all([
     client.from("profiles").select("*").order("created_at", { ascending: true }),
     client.from("posts").select("*").order("created_at", { ascending: false }),
     client.from("comments").select("*").order("created_at", { ascending: false }),
-    client.from("post_reactions").select("*").order("created_at", { ascending: false })
+    client.from("post_reactions").select("*").order("created_at", { ascending: false }),
+    client.from("follows").select("*").order("created_at", { ascending: false })
   ]);
 
   if (profilesError) throw profilesError;
   if (postsError) throw postsError;
   if (commentsError) throw commentsError;
   if (reactionsError) throw reactionsError;
+  if (followsError) throw followsError;
 
   return {
     users: (profiles || []).map((row) => toUser(row as ProfileRow)),
     posts: ensureCanvasPositions((posts || []).map((row) => toPost(row as PostRow))),
     comments: (comments || []).map((row) => toComment(row as CommentRow)),
-    reactions: (reactions || []).map((row) => toReaction(row as ReactionRow))
+    reactions: (reactions || []).map((row) => toReaction(row as ReactionRow)),
+    follows: (follows || []).map((row) => toFollow(row as FollowRow))
   };
 }
 
@@ -417,6 +460,25 @@ export async function addCommentReal(comment: Comment) {
   const { error: counterError } = await client.rpc("increment_post_counter", { target_post_id: comment.postId, counter_name: "comments_count" });
   if (counterError) throw counterError;
   return toComment(data as CommentRow);
+}
+
+export async function toggleFollowReal(followerId: string, followingId: string) {
+  const client = requireSupabase();
+  if (followerId === followingId) throw new Error("You cannot follow yourself.");
+  const { data: existing, error: existingError } = await client.from("follows").select("*").eq("follower_id", followerId).eq("following_id", followingId).maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) {
+    const { error } = await client.from("follows").delete().eq("follower_id", followerId).eq("following_id", followingId);
+    if (error) throw error;
+    const { error: counterError } = await client.rpc("adjust_follow_counts", { target_follower_id: followerId, target_following_id: followingId, amount: -1 });
+    if (counterError) throw counterError;
+    return { follow: toFollow(existing as FollowRow), active: false };
+  }
+  const { data, error } = await client.from("follows").insert({ follower_id: followerId, following_id: followingId }).select("*").single();
+  if (error) throw error;
+  const { error: counterError } = await client.rpc("adjust_follow_counts", { target_follower_id: followerId, target_following_id: followingId, amount: 1 });
+  if (counterError) throw counterError;
+  return { follow: toFollow(data as FollowRow), active: true };
 }
 
 export async function uploadMediaReal(file: File, userId: string, folder = "posts") {

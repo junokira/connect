@@ -9,6 +9,9 @@ type Props = {
   post: Post;
   author: User;
   emphasized?: boolean;
+  liked?: boolean;
+  reposted?: boolean;
+  bookmarked?: boolean;
   onOpen: () => void;
   onProfile: () => void;
   onLike: () => void;
@@ -17,7 +20,7 @@ type Props = {
   onBookmark: () => void;
 };
 
-export function PostCard({ post, author, emphasized, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
+export function PostCard({ post, author, emphasized, liked, reposted, bookmarked, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
   const text = post.type === "text" ? post.content : post.caption;
   const embedUrl = getVideoEmbedUrl(post.videoUrl);
   const directVideo = isDirectVideoUrl(post.videoUrl);
@@ -86,17 +89,17 @@ export function PostCard({ post, author, emphasized, onOpen, onProfile, onLike, 
           ))}
         </div>
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <button onClick={action(onLike)} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10" aria-label="Like post">
-            <Heart size={14} /> {formatCount(post.likesCount)}
+          <button onClick={action(onLike)} className={`flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10 ${liked ? "text-rose-600" : ""}`} aria-label="Like post">
+            <Heart size={14} fill={liked ? "currentColor" : "none"} /> {formatCount(post.likesCount)}
           </button>
           <button onClick={action(onComment)} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-sky-400/10" aria-label="Comment on post">
             <MessageCircle size={14} /> {formatCount(post.commentsCount)}
           </button>
-          <button onClick={action(onRepost)} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-400/10" aria-label="Repost">
+          <button onClick={action(onRepost)} className={`flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-400/10 ${reposted ? "text-emerald-600" : ""}`} aria-label="Repost">
             <Repeat2 size={14} /> {formatCount(post.repostsCount)}
           </button>
-          <button onClick={action(onBookmark)} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-400/10" aria-label="Bookmark post">
-            <Bookmark size={14} /> {formatCount(post.bookmarksCount)}
+          <button onClick={action(onBookmark)} className={`flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-400/10 ${bookmarked ? "text-amber-600" : ""}`} aria-label="Bookmark post">
+            <Bookmark size={14} fill={bookmarked ? "currentColor" : "none"} /> {formatCount(post.bookmarksCount)}
           </button>
         </div>
       </div>

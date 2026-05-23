@@ -156,6 +156,22 @@ begin
 end;
 $$;
 
+create or replace function public.connect_email_registered(target_email text)
+returns boolean
+language sql
+security definer
+set search_path = auth, public
+as $$
+  select exists (
+    select 1
+    from auth.users
+    where lower(email) = lower(trim(target_email))
+  );
+$$;
+
+revoke execute on function public.connect_email_registered(text) from anon, authenticated;
+grant execute on function public.connect_email_registered(text) to anon, authenticated;
+
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
@@ -295,6 +311,43 @@ grant execute on function public.adjust_post_counter(uuid, text, integer) to aut
 revoke execute on function public.increment_post_counter(uuid, text) from anon;
 grant execute on function public.increment_post_counter(uuid, text) to authenticated;
 
+create or replace function public.adjust_follow_counts(target_follower_id uuid, target_following_id uuid, amount integer)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_id uuid;
+begin
+  actor_id := auth.uid();
+  if actor_id is null or actor_id <> target_follower_id then
+    raise exception 'Authentication required';
+  end if;
+  if target_follower_id = target_following_id then
+    raise exception 'Users cannot follow themselves';
+  end if;
+  if amount not in (-1, 1) then
+    raise exception 'Unsupported follow adjustment %', amount;
+  end if;
+  if amount = 1 and not exists (
+    select 1 from public.follows
+    where follower_id = target_follower_id and following_id = target_following_id
+  ) then
+    raise exception 'A follow row is required before incrementing follow counts';
+  end if;
+  update public.profiles
+  set following_count = greatest(0, following_count + amount)
+  where id = target_follower_id;
+  update public.profiles
+  set followers_count = greatest(0, followers_count + amount)
+  where id = target_following_id;
+end;
+$$;
+
+revoke execute on function public.adjust_follow_counts(uuid, uuid, integer) from anon;
+grant execute on function public.adjust_follow_counts(uuid, uuid, integer) to authenticated;
+
 do $$
 begin
   alter publication supabase_realtime add table public.profiles;
@@ -316,5 +369,11 @@ end $$;
 do $$
 begin
   alter publication supabase_realtime add table public.post_reactions;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.follows;
 exception when duplicate_object then null;
 end $$;
