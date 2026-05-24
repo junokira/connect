@@ -1,4 +1,4 @@
-import { LocateFixed, Map } from "lucide-react";
+import { LocateFixed } from "lucide-react";
 import { PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CanvasView, FeedStyle, Post, PostReaction, SortMode, User, UserBlock, UserMute } from "../types";
 import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y, CANVAS_CARD_HEIGHT, CANVAS_CARD_WIDTH, resolveCanvasCollisions } from "../utils/canvasLayout";
@@ -91,7 +91,6 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   const frameRef = useRef<number | null>(null);
   const queuedViewRef = useRef<CanvasView | null>(null);
   const [size, setSize] = useState({ width: 1400, height: 900 });
-  const [minimapOpen, setMinimapOpen] = useState(true);
   const touchRef = useRef<{ distance: number; zoom: number } | null>(null);
 
   const scheduleView = useCallback((nextView: CanvasView) => {
@@ -179,17 +178,6 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   }, [positionedPosts, size.height, size.width, view]);
 
   const cardMode = view.zoom < 0.62 ? "compact" : view.zoom > 1.28 ? "expanded" : "standard";
-  const minimap = useMemo(() => {
-    if (!positionedPosts.length) return undefined;
-    const xs = positionedPosts.map((item) => item.position.x);
-    const ys = positionedPosts.map((item) => item.position.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs) + CANVAS_CARD_WIDTH;
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys) + CANVAS_CARD_HEIGHT;
-    return { minX, maxX, minY, maxY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
-  }, [positionedPosts]);
-
   useEffect(() => {
     if (!positionedPosts.length || visiblePosts.length) return;
     centerLatest();
@@ -330,30 +318,6 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
           );
         })}
       </div>
-      {minimap && minimapOpen ? (
-        <div className="fixed bottom-24 left-4 z-20 h-[100px] w-[160px] overflow-hidden rounded-xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 lg:bottom-5">
-          <button onClick={(event) => { event.stopPropagation(); setMinimapOpen(false); }} className="absolute right-1 top-1 z-10 grid h-5 w-5 place-items-center rounded bg-white/80 text-xs dark:bg-slate-900">×</button>
-          <button
-            className="relative h-full w-full"
-            onClick={(event) => {
-              event.stopPropagation();
-              const rect = event.currentTarget.getBoundingClientRect();
-              const x = minimap.minX + ((event.clientX - rect.left) / rect.width) * minimap.width;
-              const y = minimap.minY + ((event.clientY - rect.top) / rect.height) * minimap.height;
-              onViewChange({ ...view, x: -(x + CANVAS_CARD_CENTER_X), y: -(y + CANVAS_CARD_CENTER_Y) });
-            }}
-            aria-label="Canvas minimap"
-          >
-            {positionedPosts.map(({ post, position }) => {
-              const heat = post.likesCount + post.commentsCount * 2 + post.repostsCount * 3;
-              const color = heat >= 500 ? "bg-rose-500" : heat >= 50 ? "bg-orange-400" : heat >= 10 ? "bg-amber-400" : "bg-slate-400";
-              return <span key={post.id} className={`absolute h-1.5 w-1.5 rounded-full ${color}`} style={{ left: `${((position.x - minimap.minX) / minimap.width) * 100}%`, top: `${((position.y - minimap.minY) / minimap.height) * 100}%` }} />;
-            })}
-            <span className="minimap-viewport" style={{ left: `${((-view.x / view.zoom - minimap.minX) / minimap.width) * 100}%`, top: `${((-view.y / view.zoom - minimap.minY) / minimap.height) * 100}%`, width: `${Math.min(100, (size.width / view.zoom / minimap.width) * 100)}%`, height: `${Math.min(100, (size.height / view.zoom / minimap.height) * 100)}%` }} />
-          </button>
-        </div>
-      ) : null}
-      {!minimapOpen ? <button onClick={() => setMinimapOpen(true)} className="fixed bottom-24 left-4 z-20 grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 lg:bottom-5" aria-label="Show minimap"><Map size={17} /></button> : null}
     </main>
   );
 }
