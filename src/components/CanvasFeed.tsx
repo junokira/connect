@@ -29,6 +29,7 @@ type Props = {
   className?: string;
   recenterSignal?: number;
   interactive?: boolean;
+  interactionMode?: "full" | "horizontal" | "none";
   showControls?: boolean;
 };
 
@@ -83,7 +84,8 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: topic + column * 214 - 428, y: (day % 9) * 28 + row * 268 - 190 };
 };
 
-export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0, interactive = true, showControls = true }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0, interactive = true, interactionMode, showControls = true }: Props) {
+  const mode = interactionMode || (interactive ? "full" : "none");
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
   const didDragRef = useRef(false);
@@ -133,9 +135,16 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
 
   useEffect(() => {
     const node = viewportRef.current;
-    if (!node || !interactive) return;
+    if (!node || mode === "none") return;
 
     const handleWheel = (event: globalThis.WheelEvent) => {
+      if (mode === "horizontal") {
+        const horizontalDelta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.shiftKey ? event.deltaY : 0;
+        if (!horizontalDelta) return;
+        event.preventDefault();
+        scheduleView({ ...viewRef.current, x: viewRef.current.x - horizontalDelta });
+        return;
+      }
       event.preventDefault();
       updateSize();
       const current = viewRef.current;
@@ -153,7 +162,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
 
     node.addEventListener("wheel", handleWheel, { passive: false });
     return () => node.removeEventListener("wheel", handleWheel);
-  }, [interactive, scheduleView, updateSize]);
+  }, [mode, scheduleView, updateSize]);
 
   const visibleSourcePosts = useMemo(() => posts.filter((post) => !blocks.some((block) => block.blockedId === post.authorId) && !mutes.some((mute) => mute.mutedId === post.authorId)), [blocks, mutes, posts]);
 
@@ -202,7 +211,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
 
   const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
     event.stopPropagation();
-    if (!interactive) return;
+    if (mode === "none") return;
     if ((event.target as HTMLElement).closest("button,input,select,textarea,a,video")) return;
     const postElement = (event.target as HTMLElement).closest<HTMLElement>("[data-canvas-post-id]");
     updateSize();
@@ -215,8 +224,15 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   const pointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.id !== event.pointerId) return;
-    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 6) didDragRef.current = true;
-    scheduleView({ ...viewRef.current, x: drag.view.x + event.clientX - drag.x, y: drag.view.y + event.clientY - drag.y });
+    const deltaX = event.clientX - drag.x;
+    const deltaY = event.clientY - drag.y;
+    if (Math.hypot(deltaX, deltaY) > 6) didDragRef.current = true;
+    if (mode === "horizontal") {
+      if (Math.abs(deltaY) > Math.abs(deltaX) * 1.1) return;
+      scheduleView({ ...viewRef.current, x: drag.view.x + deltaX, y: drag.view.y });
+      return;
+    }
+    scheduleView({ ...viewRef.current, x: drag.view.x + deltaX, y: drag.view.y + deltaY });
   };
 
   const pointerUp = (event: PointerEvent<HTMLDivElement>) => {
@@ -229,7 +245,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   };
 
   const touchMove = (event: TouchEvent<HTMLDivElement>) => {
-    if (!interactive) return;
+    if (mode !== "full") return;
     event.stopPropagation();
     if (event.touches.length !== 2) return;
     event.preventDefault();
@@ -245,14 +261,15 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   return (
     <main
       ref={viewportRef}
-      className={`canvas-viewport relative flex-1 overflow-hidden bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white ${interactive ? "cursor-grab active:cursor-grabbing" : "cursor-default"} ${className}`}
+      className={`canvas-viewport relative flex-1 overflow-hidden bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white ${mode !== "none" ? "cursor-grab active:cursor-grabbing" : "cursor-default"} ${className}`}
+      style={{ touchAction: mode === "horizontal" ? "pan-y" : mode === "full" ? "none" : "auto" }}
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
       onPointerUp={pointerUp}
       onPointerCancel={pointerUp}
       onTouchMove={touchMove}
       onTouchStart={(event) => {
-        if (interactive) event.stopPropagation();
+        if (mode === "full") event.stopPropagation();
       }}
       onTouchEnd={() => (touchRef.current = null)}
       onClickCapture={(event) => {

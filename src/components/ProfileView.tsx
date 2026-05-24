@@ -1,6 +1,6 @@
-import { Bookmark, CalendarDays, Heart, ImagePlus, Link as LinkIcon, Loader2, MapPin, Maximize2, Menu, Minimize2, Pencil, Repeat2, Settings, Shield, Upload, X } from "lucide-react";
+import { BadgeCheck, Bookmark, CalendarDays, Heart, ImagePlus, Link as LinkIcon, Loader2, MapPin, Maximize2, Menu, Minimize2, Pencil, Repeat2, Settings, Shield, Upload, X } from "lucide-react";
 import { FormEvent, MouseEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
-import { CanvasView, Follow, Post, PostReaction, ProfileUpdate, User, UserBlock, UserMute } from "../types";
+import { CanvasView, Follow, Post, PostReaction, ProfileUpdate, User, UserBlock, UserMute, VerificationRequestStatus } from "../types";
 import { normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
 import { CanvasFeed } from "./CanvasFeed";
@@ -11,6 +11,8 @@ type Props = {
   user?: User;
   currentUserId: string;
   currentUserEmail: string;
+  verificationStatus: VerificationRequestStatus;
+  verificationReason: string;
   users: User[];
   posts: Post[];
   reactions: PostReaction[];
@@ -201,7 +203,8 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
 
   return (
     <div onMouseDown={onClose} className="fixed inset-0 z-[60] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <form onSubmit={submit} onMouseDown={stop} className="thin-scrollbar max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
+      <form onSubmit={submit} onMouseDown={stop} className="thin-scrollbar flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
+        <div className="overflow-y-auto p-5 pb-6">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-lg font-black">Edit profile</p>
@@ -308,11 +311,76 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
           {verificationStatus ? <p className="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-300">{verificationStatus}</p> : null}
         </div>
         {error ? <p className="mt-4 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
-        <button disabled={saving} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">
+        </div>
+        <div className="sticky bottom-0 z-10 grid gap-2 border-t border-slate-200 bg-white/94 p-4 pb-[max(16px,calc(env(safe-area-inset-bottom)+96px))] backdrop-blur dark:border-white/10 dark:bg-[#0f1115]/94 sm:grid-cols-2 sm:pb-4">
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold disabled:opacity-50 dark:border-white/15">Cancel</button>
+        <button disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">
           {saving ? <Loader2 className="animate-spin" size={17} /> : <Pencil size={17} />}
           {saving ? "Saving..." : "Save profile"}
         </button>
+        </div>
       </form>
+    </div>
+  );
+}
+
+function VerificationSheet({ user, isOwnProfile, status, reason, onClose, onRequestVerification }: { user: User; isOwnProfile: boolean; status: VerificationRequestStatus; reason: string; onClose: () => void; onRequestVerification: (reason?: string) => Promise<void> }) {
+  const [requestReason, setRequestReason] = useState(reason);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const derivedStatus = user.verified ? "approved" : status;
+  const title = user.verified ? "Verified account" : derivedStatus === "pending" ? "Verification request pending" : "Request verification";
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  const submit = async () => {
+    try {
+      setSaving(true);
+      setError("");
+      await onRequestVerification(requestReason);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not request verification.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div onMouseDown={onClose} className="fixed inset-0 z-[72] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <section onMouseDown={(event) => event.stopPropagation()} className="modal-enter w-full max-w-md rounded-t-[28px] border border-slate-200 bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))] shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#007aff]/10 text-[#007aff]">
+              <BadgeCheck size={24} />
+            </span>
+            <div>
+              <h2 className="text-lg font-black">{title}</h2>
+              <p className="text-sm text-slate-500">@{user.username}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close verification details"><X size={19} /></button>
+        </div>
+        <p className="mt-5 text-sm leading-6 text-slate-600 dark:text-slate-300">Verification on CONNECT means this account has been manually recognized as the authentic presence for a person, artist, company, or project.</p>
+        {user.verified ? <p className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700 dark:bg-blue-400/10 dark:text-blue-200">Verified account</p> : null}
+        {!user.verified && derivedStatus === "pending" ? <p className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">Verification request pending</p> : null}
+        {isOwnProfile && !user.verified && derivedStatus !== "pending" ? (
+          <div className="mt-5">
+            <label className="text-sm font-bold">Request message</label>
+            <textarea value={requestReason} onChange={(event) => setRequestReason(event.target.value)} className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 text-sm outline-none focus:border-teal-500 dark:border-white/10" placeholder="Tell us what this account represents." />
+            {error ? <p className="mt-3 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
+            <button disabled={saving} onClick={() => void submit()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">
+              {saving ? <Loader2 className="animate-spin" size={16} /> : null}
+              Submit request
+            </button>
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }
@@ -341,12 +409,13 @@ function FullscreenMedia({ src, label, shape, onClose }: { src: string; label: s
   );
 }
 
-export function ProfileView({ user, currentUserId, currentUserEmail, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onBlockUser, onUnblockUser, onMuteUser, onUnmuteUser, onReportUser }: Props) {
+export function ProfileView({ user, currentUserId, currentUserEmail, verificationStatus, verificationReason, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onBlockUser, onUnblockUser, onMuteUser, onUnmuteUser, onReportUser }: Props) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("Canvas");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
   const [networkList, setNetworkList] = useState<"followers" | "following" | undefined>();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [verificationOpen, setVerificationOpen] = useState(false);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
   const [profileCanvasView, setProfileCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.95 });
   const touchStartRef = useRef<{ x: number; y: number; canClose: boolean } | null>(null);
@@ -424,7 +493,11 @@ export function ProfileView({ user, currentUserId, currentUserEmail, users, post
         <div>
           <p className="flex items-center gap-1 font-bold">
             {user.displayName}
-            <VerifiedBadge verified={user.verified} size={15} />
+            {(user.verified || isOwnProfile) ? (
+              <button onClick={() => setVerificationOpen(true)} className="rounded-full text-slate-400 hover:text-[#007aff] dark:text-slate-500 dark:hover:text-[#64d2ff]" aria-label="Open verification details">
+                {user.verified ? <VerifiedBadge verified size={15} /> : <BadgeCheck size={15} strokeWidth={2.4} />}
+              </button>
+            ) : null}
           </p>
           <p className="text-sm text-slate-500">{profileData.userPosts.length} posts</p>
         </div>
@@ -486,7 +559,11 @@ export function ProfileView({ user, currentUserId, currentUserEmail, users, post
           <div className="mt-4">
             <h1 className="flex items-center gap-2 text-2xl font-black">
               {user.displayName}
-              <VerifiedBadge verified={user.verified} size={21} />
+              {(user.verified || isOwnProfile) ? (
+                <button onClick={() => setVerificationOpen(true)} className="rounded-full text-slate-400 hover:text-[#007aff] dark:text-slate-500 dark:hover:text-[#64d2ff]" aria-label="Open verification details">
+                  {user.verified ? <VerifiedBadge verified size={21} /> : <BadgeCheck size={21} strokeWidth={2.4} />}
+                </button>
+              ) : null}
             </h1>
             <p className="text-slate-500">@{user.username}</p>
             <p className="mt-3 max-w-2xl whitespace-pre-wrap leading-7 text-slate-700 dark:text-slate-200">{user.bio}</p>
@@ -538,10 +615,10 @@ export function ProfileView({ user, currentUserId, currentUserEmail, users, post
               {canvasFullscreen ? <button onClick={() => setCanvasFullscreen(false)} className="absolute left-3 top-3 z-30 rounded-xl border border-slate-200 bg-white/88 px-3 py-2 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88">Back to profile</button> : null}
               {!canvasFullscreen ? (
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[#f5f5f7] via-[#f5f5f7]/70 to-transparent p-5 text-sm font-semibold text-slate-500 dark:from-[#050505] dark:via-[#050505]/70">
-                  Preview only. Open canvas to pan and zoom.
+                  Swipe sideways to explore. Open canvas for full pan and zoom.
                 </div>
               ) : null}
-              <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="gallery" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={onOpenPost} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" interactive={canvasFullscreen} showControls={canvasFullscreen} />
+              <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="gallery" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={onOpenPost} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" interactionMode={canvasFullscreen ? "full" : "horizontal"} showControls={canvasFullscreen} />
             </div>
           ) : activeTab === "Media" ? (
             <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-3">
@@ -620,6 +697,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, users, post
         ) : null}
       </div>
       {editing ? <EditProfileDialog user={user} currentEmail={currentUserEmail} onClose={() => setEditing(false)} onSave={onUpdateProfile} onUpdatePassword={onUpdatePassword} onUpdateEmail={onUpdateEmail} onRequestVerification={onRequestVerification} /> : null}
+      {verificationOpen ? <VerificationSheet user={user} isOwnProfile={isOwnProfile} status={verificationStatus} reason={verificationReason} onClose={() => setVerificationOpen(false)} onRequestVerification={onRequestVerification} /> : null}
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
       {networkList ? (
         <div onMouseDown={() => setNetworkList(undefined)} className="fixed inset-0 z-[75] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">

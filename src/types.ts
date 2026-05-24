@@ -143,6 +143,8 @@ export type UserMute = {
   createdAt: string;
 };
 
+export type VerificationRequestStatus = "none" | "pending" | "approved" | "rejected";
+
 export type OGPreview = {
   url: string;
   title: string;

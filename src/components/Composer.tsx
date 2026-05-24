@@ -1,4 +1,4 @@
-import { Image, Link2, Loader2, Send, Upload, Video } from "lucide-react";
+import { Image, Link2, Loader2, Send, Upload, Video, X } from "lucide-react";
 import { ClipboardEvent, FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
 import { OGPreview, PostType, User } from "../types";
 import { fetchOGPreview } from "../lib/supabaseData";
@@ -77,6 +77,26 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   };
   const aspectClass = previewAspect === "square" ? "aspect-square" : previewAspect === "portrait" ? "aspect-[4/5]" : previewAspect === "wide" ? "aspect-video" : "";
   const fitClass = previewFit === "cover" ? "object-cover" : "object-contain";
+  const clearMedia = () => {
+    setImageUrl("");
+    setVideoUrl("");
+    setThumbnailUrl("");
+    setMediaFile(undefined);
+    setThumbnailFile(undefined);
+    setMediaPreview("");
+    setThumbnailPreview("");
+    setError("");
+  };
+  const clearImport = () => {
+    setSourceUrl("");
+    setOgPreview(undefined);
+    setError("");
+  };
+  const switchToTextOnly = () => {
+    clearMedia();
+    clearImport();
+    setType("text");
+  };
 
   const publish = async (event: FormEvent) => {
     event.preventDefault();
@@ -172,7 +192,13 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
                 }
               }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold dark:border-white/10">{previewLoading ? <Loader2 className="animate-spin" size={16} /> : "Preview"}</button>
             </div>
-            {ogPreview ? <div className="overflow-hidden rounded-2xl bg-slate-100 dark:bg-white/10">{ogPreview.embedUrl ? <iframe className="aspect-video w-full bg-black" src={ogPreview.embedUrl} title="Link preview" allowFullScreen /> : ogPreview.image ? <img className="max-h-64 w-full object-cover" src={ogPreview.image} alt="" /> : null}<div className="p-4"><p className="text-xs font-bold uppercase text-slate-500">{ogPreview.platform}</p><p className="font-bold">{ogPreview.title}</p><p className="line-clamp-2 text-sm text-slate-500">{ogPreview.description}</p></div></div> : null}
+            {ogPreview ? (
+              <div className="relative overflow-hidden rounded-2xl bg-slate-100 dark:bg-white/10">
+                <button type="button" onClick={clearImport} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove imported preview"><X size={17} /></button>
+                {ogPreview.embedUrl ? <iframe className="aspect-video w-full bg-black" src={ogPreview.embedUrl} title="Link preview" allowFullScreen /> : ogPreview.image ? <img className="max-h-64 w-full object-cover" src={ogPreview.image} alt="" /> : null}
+                <div className="p-4"><p className="text-xs font-bold uppercase text-slate-500">{ogPreview.platform}</p><p className="font-bold">{ogPreview.title}</p><p className="line-clamp-2 text-sm text-slate-500">{ogPreview.description}</p></div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-3">
@@ -231,18 +257,28 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
                 </select>
               </label>
             </div>
+            {(mediaFile || imageUrl || videoUrl || thumbnailFile || thumbnailUrl) ? (
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={clearMedia} className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">
+                  <X size={14} /> Remove media
+                </button>
+                <button type="button" onClick={switchToTextOnly} className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">
+                  Text only
+                </button>
+              </div>
+            ) : null}
           </div>
         )}
 
         <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
-          {type === "photo" && (mediaPreview || imageUrl) ? <img className={`max-h-[420px] w-full bg-slate-100 dark:bg-black ${aspectClass} ${fitClass}`} src={mediaPreview || imageUrl} alt="" /> : null}
-          {type === "video" && mediaPreview ? <video className={`max-h-[420px] w-full bg-black ${aspectClass} ${fitClass}`} src={mediaPreview} controls /> : null}
-          {type === "video" && !mediaPreview && normalizedVideoUrl && isDirectVideoUrl(normalizedVideoUrl) ? <video className={`max-h-[420px] w-full bg-black ${aspectClass} ${fitClass}`} src={normalizedVideoUrl} poster={thumbnailPreview || thumbnailUrl} controls /> : null}
-          {type === "video" && !mediaPreview && normalizedVideoUrl && videoEmbedUrl ? <iframe className="aspect-video w-full bg-black" src={videoEmbedUrl} title="External video preview" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /> : null}
+          {type === "photo" && (mediaPreview || imageUrl) ? <div className="relative"><button type="button" onClick={clearMedia} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove photo"><X size={17} /></button><img className={`max-h-[420px] w-full bg-slate-100 dark:bg-black ${aspectClass} ${fitClass}`} src={mediaPreview || imageUrl} alt="" /></div> : null}
+          {type === "video" && mediaPreview ? <div className="relative"><button type="button" onClick={clearMedia} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove video"><X size={17} /></button><video className={`max-h-[420px] w-full bg-black ${aspectClass} ${fitClass}`} src={mediaPreview} controls /></div> : null}
+          {type === "video" && !mediaPreview && normalizedVideoUrl && isDirectVideoUrl(normalizedVideoUrl) ? <div className="relative"><button type="button" onClick={clearMedia} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove video"><X size={17} /></button><video className={`max-h-[420px] w-full bg-black ${aspectClass} ${fitClass}`} src={normalizedVideoUrl} poster={thumbnailPreview || thumbnailUrl} controls /></div> : null}
+          {type === "video" && !mediaPreview && normalizedVideoUrl && videoEmbedUrl ? <div className="relative"><button type="button" onClick={clearMedia} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove external video"><X size={17} /></button><iframe className="aspect-video w-full bg-black" src={videoEmbedUrl} title="External video preview" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div> : null}
           {type === "video" && !mediaPreview && normalizedVideoUrl && !videoEmbedUrl && !isDirectVideoUrl(normalizedVideoUrl) ? (
             <a className="block bg-slate-950 p-4 text-sm font-semibold text-white underline" href={normalizedVideoUrl} target="_blank" rel="noreferrer">Open external video</a>
           ) : null}
-          {type === "video" && !mediaPreview && !normalizedVideoUrl && (thumbnailPreview || thumbnailUrl) ? <img className="max-h-[420px] w-full bg-slate-100 object-contain dark:bg-black" src={thumbnailPreview || thumbnailUrl} alt="" /> : null}
+          {type === "video" && !mediaPreview && !normalizedVideoUrl && (thumbnailPreview || thumbnailUrl) ? <div className="relative"><button type="button" onClick={() => { setThumbnailFile(undefined); setThumbnailUrl(""); }} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove thumbnail"><X size={17} /></button><img className="max-h-[420px] w-full bg-slate-100 object-contain dark:bg-black" src={thumbnailPreview || thumbnailUrl} alt="" /></div> : null}
           <div className="p-4">
             <p className="mb-1 text-xs font-semibold uppercase text-slate-400">Draft preview</p>
             <p className="min-h-8 text-sm text-slate-700 dark:text-slate-200">{preview || (type === "text" ? "Your post preview will appear here." : "Media posts can publish with or without a caption.")}</p>

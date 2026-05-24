@@ -1,4 +1,4 @@
-import { Comment, CommentReaction, Follow, Notification, OGPreview, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, User, UserBlock, UserMute } from "../types";
+import { Comment, CommentReaction, Follow, Notification, OGPreview, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, User, UserBlock, UserMute, VerificationRequestStatus } from "../types";
 import { supabase } from "./supabase";
 
 type ProfileRow = {
@@ -395,6 +395,22 @@ export async function requestVerificationReal(user: User, reason = "") {
     if (/duplicate key/i.test(error.message)) throw new Error("Your verification request is already pending.");
     throw error;
   }
+}
+
+export async function loadVerificationRequestStatus(userId: string): Promise<{ status: VerificationRequestStatus; reason: string }> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("verification_requests")
+    .select("status, reason, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (/relation .*verification_requests/i.test(error.message)) return { status: "none", reason: "" };
+    throw error;
+  }
+  return { status: (data?.status as VerificationRequestStatus | undefined) || "none", reason: data?.reason || "" };
 }
 
 export async function sendMagicLink(email: string) {

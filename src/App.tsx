@@ -467,6 +467,8 @@ export default function App() {
     mutes,
     currentUserId,
     currentUserEmail,
+    verificationStatus,
+    verificationReason,
     authed,
     loading,
     error,
@@ -775,6 +777,8 @@ export default function App() {
         user={activeProfile}
         currentUserId={currentUserId}
         currentUserEmail={currentUserEmail}
+        verificationStatus={verificationStatus}
+        verificationReason={verificationReason}
         users={users}
         posts={posts}
         reactions={reactions}

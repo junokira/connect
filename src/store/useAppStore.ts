@@ -16,6 +16,7 @@ import {
   loadBlocksAndMutes,
   loadConnectData,
   loadNotifications as loadNotificationsReal,
+  loadVerificationRequestStatus,
   markNotificationsRead as markNotificationsReadReal,
   muteUserReal,
   reactToPostReal,
@@ -36,7 +37,7 @@ import {
   updateProfileReal,
   uploadMediaReal
 } from "../lib/supabaseData";
-import { CanvasView, Comment, CommentReaction, FeedStyle, Follow, Notification, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, SortMode, User, UserBlock, UserMute } from "../types";
+import { CanvasView, Comment, CommentReaction, FeedStyle, Follow, Notification, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, SortMode, User, UserBlock, UserMute, VerificationRequestStatus } from "../types";
 import { placeNextPost } from "../utils/placement";
 
 type DraftInput = {
@@ -67,6 +68,8 @@ type AppState = {
   mutes: UserMute[];
   currentUserId: string;
   currentUserEmail: string;
+  verificationStatus: VerificationRequestStatus;
+  verificationReason: string;
   authed: boolean;
   backendMode: "supabase";
   loading: boolean;
@@ -137,6 +140,14 @@ const loadSafeNotifications = async (userId?: string) => {
     return [] as Notification[];
   }
 };
+const loadSafeVerification = async (userId?: string) => {
+  if (!userId) return { status: "none" as VerificationRequestStatus, reason: "" };
+  try {
+    return await loadVerificationRequestStatus(userId);
+  } catch {
+    return { status: "none" as VerificationRequestStatus, reason: "" };
+  }
+};
 
 const makePost = (draft: DraftInput, posts: Post[], authorId: string): Post => {
   const now = new Date().toISOString();
@@ -182,6 +193,8 @@ export const useAppStore = create<AppState>()(
       mutes: [],
       currentUserId: "",
       currentUserEmail: "",
+      verificationStatus: "none",
+      verificationReason: "",
       authed: false,
       backendMode: "supabase",
       loading: true,
@@ -211,6 +224,7 @@ export const useAppStore = create<AppState>()(
           const data = await loadConnectData();
           const extras = await loadSafeExtras(userId);
           const notifications = await loadSafeNotifications(userId);
+          const verification = await loadSafeVerification(userId);
           set({
             ...data,
             ...extras,
@@ -218,6 +232,8 @@ export const useAppStore = create<AppState>()(
             unreadNotificationCount: notifications.filter((notification) => !notification.read).length,
             currentUserId: userId || "",
             currentUserEmail,
+            verificationStatus: verification.status,
+            verificationReason: verification.reason,
             authed: Boolean(userId),
             loading: false
           });
@@ -232,7 +248,8 @@ export const useAppStore = create<AppState>()(
         const currentUserEmail = userId ? await getCurrentAuthEmail() : "";
         const extras = await loadSafeExtras(userId);
         const notifications = await loadSafeNotifications(userId);
-        set({ ...data, ...extras, currentUserEmail, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length });
+        const verification = await loadSafeVerification(userId);
+        set({ ...data, ...extras, currentUserEmail, verificationStatus: verification.status, verificationReason: verification.reason, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length });
       },
       signIn: async (email, password) => {
         if (!isSupabaseConfigured) {
@@ -246,7 +263,8 @@ export const useAppStore = create<AppState>()(
           const data = await loadConnectData();
           const extras = await loadSafeExtras(userId);
           const notifications = await loadSafeNotifications(userId);
-          set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, currentUserId: userId, currentUserEmail, authed: true, loading: false });
+          const verification = await loadSafeVerification(userId);
+          set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, currentUserId: userId, currentUserEmail, verificationStatus: verification.status, verificationReason: verification.reason, authed: true, loading: false });
         } catch (error) {
           set({ error: error instanceof Error ? error.message : "Unable to sign in.", loading: false });
         }
@@ -260,14 +278,15 @@ export const useAppStore = create<AppState>()(
           set({ loading: true, error: undefined });
           const { userId, sessionReady } = await signUpWithPassword(email, password, profile);
           if (!sessionReady) {
-            set({ authed: false, currentUserId: "", currentUserEmail: "", loading: false, error: undefined });
+            set({ authed: false, currentUserId: "", currentUserEmail: "", verificationStatus: "none", verificationReason: "", loading: false, error: undefined });
             return false;
           }
           const currentUserEmail = await getCurrentAuthEmail();
           const data = await loadConnectData();
           const extras = await loadSafeExtras(userId);
           const notifications = await loadSafeNotifications(userId);
-          set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, currentUserId: userId, currentUserEmail, activeProfileId: userId, authed: true, loading: false });
+          const verification = await loadSafeVerification(userId);
+          set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, currentUserId: userId, currentUserEmail, verificationStatus: verification.status, verificationReason: verification.reason, activeProfileId: userId, authed: true, loading: false });
           return true;
         } catch (error) {
           set({ error: error instanceof Error ? error.message : "Unable to create your account.", loading: false });
@@ -350,11 +369,11 @@ export const useAppStore = create<AppState>()(
         const currentUser = get().users.find((user) => user.id === get().currentUserId);
         if (!currentUser) throw new Error("You must be signed in to request verification.");
         await requestVerificationReal(currentUser, reason);
-        set({ error: undefined });
+        set({ verificationStatus: "pending", verificationReason: reason.trim(), error: undefined });
       },
       signOut: async () => {
         await signOutReal();
-        set({ authed: false, currentUserId: "", currentUserEmail: "" });
+        set({ authed: false, currentUserId: "", currentUserEmail: "", verificationStatus: "none", verificationReason: "" });
       },
       createPost: async (draft) => {
         if (!get().currentUserId) throw new Error("You must be signed in to create a post.");
