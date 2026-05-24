@@ -10,6 +10,7 @@ import { VerifiedBadge } from "./VerifiedBadge";
 type Props = {
   user?: User;
   currentUserId: string;
+  currentUserEmail: string;
   users: User[];
   posts: Post[];
   reactions: PostReaction[];
@@ -25,6 +26,7 @@ type Props = {
   onFollowUser: (id: string) => void;
   onUpdateProfile: (profile: ProfileUpdate) => Promise<void>;
   onUpdatePassword: (password: string) => Promise<void>;
+  onUpdateEmail: (email: string) => Promise<{ email: string; pendingEmail: string }>;
   onRequestVerification: () => Promise<void>;
   onBlockUser?: (id: string) => void;
   onUnblockUser?: (id: string) => void;
@@ -36,7 +38,7 @@ type Props = {
 type ProfileTab = "Canvas" | "Posts" | "Media" | "Likes" | "Saved" | "Reposts";
 const tabs: ProfileTab[] = ["Canvas", "Posts", "Media", "Likes", "Saved"];
 
-function EditProfileDialog({ user, onClose, onSave, onUpdatePassword, onRequestVerification }: { user: User; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void>; onRequestVerification: () => Promise<void> }) {
+function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePassword, onUpdateEmail, onRequestVerification }: { user: User; currentEmail: string; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void>; onUpdateEmail: (email: string) => Promise<{ email: string; pendingEmail: string }>; onRequestVerification: () => Promise<void> }) {
   const [form, setForm] = useState<ProfileUpdate>({
     displayName: user.displayName,
     username: user.username,
@@ -52,6 +54,8 @@ function EditProfileDialog({ user, onClose, onSave, onUpdatePassword, onRequestV
   const [bannerPreview, setBannerPreview] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordStatus, setPasswordStatus] = useState("");
+  const [email, setEmail] = useState(currentEmail);
+  const [emailStatus, setEmailStatus] = useState("");
   const [verificationStatus, setVerificationStatus] = useState("");
 
   useEffect(() => {
@@ -125,6 +129,33 @@ function EditProfileDialog({ user, onClose, onSave, onUpdatePassword, onRequestV
     }
   };
 
+  const saveEmail = async () => {
+    const nextEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (nextEmail === currentEmail.trim().toLowerCase()) {
+      setEmailStatus("This is already your account email.");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError("");
+      setEmailStatus("");
+      const result = await onUpdateEmail(nextEmail);
+      if (result.pendingEmail) {
+        setEmailStatus("Confirmation sent. Open the email from Supabase to finish changing your CONNECT login email.");
+      } else {
+        setEmailStatus("Email updated.");
+      }
+    } catch (emailError) {
+      setError(emailError instanceof Error ? emailError.message : "Could not update email.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const requestVerification = async () => {
     try {
       setSaving(true);
@@ -191,6 +222,15 @@ function EditProfileDialog({ user, onClose, onSave, onUpdatePassword, onRequestV
           <textarea value={form.bio} onChange={(event) => update("bio", event.target.value)} className="min-h-28 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
         </label>
         <div className="mt-4 rounded-2xl border border-slate-200 p-4 dark:border-white/10">
+          <p className="text-sm font-bold">Email</p>
+          <p className="mt-1 text-sm text-slate-500">Change the email you use to sign in. Supabase may ask you to confirm the new address before it takes effect.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="you@example.com" autoComplete="email" />
+            <button type="button" disabled={saving || !email.trim()} onClick={() => void saveEmail()} className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">Change email</button>
+          </div>
+          {emailStatus ? <p className="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-300">{emailStatus}</p> : null}
+        </div>
+        <div className="mt-4 rounded-2xl border border-slate-200 p-4 dark:border-white/10">
           <p className="text-sm font-bold">Password</p>
           <p className="mt-1 text-sm text-slate-500">Set or change your password after signing in with magic link.</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -241,7 +281,7 @@ function FullscreenMedia({ src, label, shape, onClose }: { src: string; label: s
   );
 }
 
-export function ProfileView({ user, currentUserId, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onRequestVerification, onBlockUser, onUnblockUser, onMuteUser, onUnmuteUser, onReportUser }: Props) {
+export function ProfileView({ user, currentUserId, currentUserEmail, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onBlockUser, onUnblockUser, onMuteUser, onUnmuteUser, onReportUser }: Props) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("Canvas");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
@@ -454,7 +494,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
           )}
         </section>
       </div>
-      {editing ? <EditProfileDialog user={user} onClose={() => setEditing(false)} onSave={onUpdateProfile} onUpdatePassword={onUpdatePassword} onRequestVerification={onRequestVerification} /> : null}
+      {editing ? <EditProfileDialog user={user} currentEmail={currentUserEmail} onClose={() => setEditing(false)} onSave={onUpdateProfile} onUpdatePassword={onUpdatePassword} onUpdateEmail={onUpdateEmail} onRequestVerification={onRequestVerification} /> : null}
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
       {networkList ? (
         <div onMouseDown={() => setNetworkList(undefined)} className="fixed inset-0 z-[75] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">

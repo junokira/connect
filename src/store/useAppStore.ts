@@ -10,6 +10,7 @@ import {
   createReportReal,
   deleteCommentReal,
   deletePostReal,
+  getCurrentAuthEmail,
   getSessionUserId,
   likeCommentReal,
   loadBlocksAndMutes,
@@ -30,6 +31,7 @@ import {
   unblockUserReal,
   unmuteUserReal,
   updatePasswordReal,
+  updateEmailReal,
   updatePostReal,
   updateProfileReal,
   uploadMediaReal
@@ -64,6 +66,7 @@ type AppState = {
   blocks: UserBlock[];
   mutes: UserMute[];
   currentUserId: string;
+  currentUserEmail: string;
   authed: boolean;
   backendMode: "supabase";
   loading: boolean;
@@ -82,6 +85,7 @@ type AppState = {
   requestMagicLink: (email: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
+  updateEmail: (email: string) => Promise<{ email: string; pendingEmail: string }>;
   requestPhoneOtp: (phone: string) => Promise<void>;
   signInWithSocialProvider: (provider: "google" | "apple") => Promise<void>;
   updateProfile: (profile: ProfileUpdate) => Promise<void>;
@@ -177,6 +181,7 @@ export const useAppStore = create<AppState>()(
       blocks: [],
       mutes: [],
       currentUserId: "",
+      currentUserEmail: "",
       authed: false,
       backendMode: "supabase",
       loading: true,
@@ -202,6 +207,7 @@ export const useAppStore = create<AppState>()(
           set({ backendMode: "supabase", loading: true, error: undefined });
           const redirectedUserId = await completeAuthRedirect();
           const userId = redirectedUserId || (await getSessionUserId());
+          const currentUserEmail = userId ? await getCurrentAuthEmail() : "";
           const data = await loadConnectData();
           const extras = await loadSafeExtras(userId);
           const notifications = await loadSafeNotifications(userId);
@@ -211,6 +217,7 @@ export const useAppStore = create<AppState>()(
             notifications,
             unreadNotificationCount: notifications.filter((notification) => !notification.read).length,
             currentUserId: userId || "",
+            currentUserEmail,
             authed: Boolean(userId),
             loading: false
           });
@@ -222,9 +229,10 @@ export const useAppStore = create<AppState>()(
         if (!isSupabaseConfigured) throw new Error("Supabase is not configured.");
         const data = await loadConnectData();
         const userId = get().currentUserId;
+        const currentUserEmail = userId ? await getCurrentAuthEmail() : "";
         const extras = await loadSafeExtras(userId);
         const notifications = await loadSafeNotifications(userId);
-        set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length });
+        set({ ...data, ...extras, currentUserEmail, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length });
       },
       signIn: async (email, password) => {
         if (!isSupabaseConfigured) {
@@ -234,10 +242,11 @@ export const useAppStore = create<AppState>()(
         try {
           set({ loading: true, error: undefined });
           const userId = await signInWithPassword(email, password);
+          const currentUserEmail = await getCurrentAuthEmail();
           const data = await loadConnectData();
           const extras = await loadSafeExtras(userId);
           const notifications = await loadSafeNotifications(userId);
-          set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, currentUserId: userId, authed: true, loading: false });
+          set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, currentUserId: userId, currentUserEmail, authed: true, loading: false });
         } catch (error) {
           set({ error: error instanceof Error ? error.message : "Unable to sign in.", loading: false });
         }
@@ -251,13 +260,14 @@ export const useAppStore = create<AppState>()(
           set({ loading: true, error: undefined });
           const { userId, sessionReady } = await signUpWithPassword(email, password, profile);
           if (!sessionReady) {
-            set({ authed: false, currentUserId: "", loading: false, error: undefined });
+            set({ authed: false, currentUserId: "", currentUserEmail: "", loading: false, error: undefined });
             return false;
           }
+          const currentUserEmail = await getCurrentAuthEmail();
           const data = await loadConnectData();
           const extras = await loadSafeExtras(userId);
           const notifications = await loadSafeNotifications(userId);
-          set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, currentUserId: userId, activeProfileId: userId, authed: true, loading: false });
+          set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, currentUserId: userId, currentUserEmail, activeProfileId: userId, authed: true, loading: false });
           return true;
         } catch (error) {
           set({ error: error instanceof Error ? error.message : "Unable to create your account.", loading: false });
@@ -288,6 +298,12 @@ export const useAppStore = create<AppState>()(
         if (!get().currentUserId) throw new Error("You must be signed in to set a password.");
         await updatePasswordReal(password);
         set({ error: undefined });
+      },
+      updateEmail: async (email) => {
+        if (!get().currentUserId) throw new Error("You must be signed in to change your email.");
+        const result = await updateEmailReal(email);
+        set({ currentUserEmail: result.pendingEmail || result.email, error: undefined });
+        return result;
       },
       requestPhoneOtp: async (phone) => {
         try {
@@ -334,7 +350,7 @@ export const useAppStore = create<AppState>()(
       },
       signOut: async () => {
         await signOutReal();
-        set({ authed: false, currentUserId: "" });
+        set({ authed: false, currentUserId: "", currentUserEmail: "" });
       },
       createPost: async (draft) => {
         if (!get().currentUserId) throw new Error("You must be signed in to create a post.");
@@ -623,7 +639,8 @@ export const useAppStore = create<AppState>()(
         theme: state.theme,
         feedStyle: state.feedStyle,
         authed: state.authed,
-        currentUserId: state.currentUserId
+        currentUserId: state.currentUserId,
+        currentUserEmail: state.currentUserEmail
       })
     }
   )

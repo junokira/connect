@@ -248,6 +248,13 @@ export async function getSessionUserId() {
   return data.session?.user.id;
 }
 
+export async function getCurrentAuthEmail() {
+  const client = requireSupabase();
+  const { data, error } = await client.auth.getUser();
+  if (error) throw error;
+  return data.user?.email || "";
+}
+
 export async function completeAuthRedirect() {
   if (typeof window === "undefined") return undefined;
   const client = requireSupabase();
@@ -346,6 +353,23 @@ export async function updatePasswordReal(password: string) {
   const client = requireSupabase();
   const { error } = await client.auth.updateUser({ password });
   if (error) throw error;
+}
+
+export async function updateEmailReal(email: string) {
+  const client = requireSupabase();
+  const nextEmail = email.trim().toLowerCase();
+  const { data, error } = await client.auth.updateUser({ email: nextEmail }, { emailRedirectTo: authRedirectUrl("confirmed") });
+  if (error) {
+    if (/already registered|already exists|duplicate/i.test(error.message)) {
+      throw new Error("That email is already connected to another CONNECT account.");
+    }
+    throw error;
+  }
+  const user = data.user as typeof data.user & { new_email?: string };
+  return {
+    email: user?.email || nextEmail,
+    pendingEmail: user?.new_email || (user?.email === nextEmail ? "" : nextEmail)
+  };
 }
 
 export async function requestVerificationReal(user: User) {

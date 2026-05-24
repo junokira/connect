@@ -466,6 +466,7 @@ export default function App() {
     blocks,
     mutes,
     currentUserId,
+    currentUserEmail,
     authed,
     loading,
     error,
@@ -499,6 +500,7 @@ export default function App() {
     followUser,
     updateProfile,
     updatePassword,
+    updateEmail,
     requestVerification,
     signOut,
     toggleTheme
@@ -760,6 +762,7 @@ export default function App() {
       <ProfileView
         user={activeProfile}
         currentUserId={currentUserId}
+        currentUserEmail={currentUserEmail}
         users={users}
         posts={posts}
         reactions={reactions}
@@ -775,6 +778,7 @@ export default function App() {
         onFollowUser={(id) => void followUser(id)}
         onUpdateProfile={updateProfile}
         onUpdatePassword={updatePassword}
+        onUpdateEmail={updateEmail}
         onRequestVerification={requestVerification}
         onBlockUser={(id) => void blockUser(id)}
         onUnblockUser={(id) => void unblockUser(id)}
