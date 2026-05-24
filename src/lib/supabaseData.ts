@@ -10,6 +10,11 @@ type ProfileRow = {
   bio: string;
   location: string;
   website: string;
+  featured_title?: string | null;
+  featured_description?: string | null;
+  featured_link?: string | null;
+  featured_banner_url?: string | null;
+  featured_cover_url?: string | null;
   created_at: string;
   followers_count: number;
   following_count: number;
@@ -107,6 +112,11 @@ const toUser = (row: ProfileRow): User => ({
   bio: row.bio,
   location: row.location,
   website: row.website,
+  featuredTitle: row.featured_title || "",
+  featuredDescription: row.featured_description || "",
+  featuredLink: row.featured_link || "",
+  featuredBannerUrl: row.featured_banner_url || "",
+  featuredCoverUrl: row.featured_cover_url || "",
   createdAt: row.created_at,
   followersCount: row.followers_count,
   followingCount: row.following_count,
@@ -372,12 +382,13 @@ export async function updateEmailReal(email: string) {
   };
 }
 
-export async function requestVerificationReal(user: User) {
+export async function requestVerificationReal(user: User, reason = "") {
   const client = requireSupabase();
   const { error } = await client.from("verification_requests").insert({
     user_id: user.id,
     username: user.username,
     display_name: user.displayName,
+    reason: reason.trim(),
     status: "pending"
   });
   if (error) {
@@ -432,7 +443,12 @@ export async function ensureProfile(userId: string, email: string, profile?: Sig
       banner_url: profile?.bannerUrl || undefined,
       bio: profile?.bio || "New to CONNECT.",
       location: profile?.location || "",
-      website: profile?.website || ""
+      website: profile?.website || "",
+      featured_title: "",
+      featured_description: "",
+      featured_link: "",
+      featured_banner_url: "",
+      featured_cover_url: ""
     })
     .select("*")
     .single();
@@ -452,7 +468,12 @@ export async function updateProfileReal(userId: string, profile: ProfileUpdate) 
       banner_url: profile.bannerUrl.trim(),
       bio: profile.bio.trim(),
       location: profile.location.trim(),
-      website: profile.website.trim()
+      website: profile.website.trim(),
+      featured_title: profile.featuredTitle.trim(),
+      featured_description: profile.featuredDescription.trim(),
+      featured_link: profile.featuredLink.trim(),
+      featured_banner_url: profile.featuredBannerUrl.trim(),
+      featured_cover_url: profile.featuredCoverUrl.trim()
     })
     .eq("id", userId)
     .select("*")

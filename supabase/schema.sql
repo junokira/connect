@@ -9,11 +9,26 @@ create table if not exists public.profiles (
   bio text not null default 'New to CONNECT.',
   location text not null default '',
   website text not null default '',
+  featured_title text not null default '',
+  featured_description text not null default '',
+  featured_link text not null default '',
+  featured_banner_url text not null default '',
+  featured_cover_url text not null default '',
   created_at timestamptz not null default now(),
   followers_count integer not null default 0,
   following_count integer not null default 0,
-  verified boolean not null default false
+  verified boolean not null default false,
+  is_admin boolean not null default false,
+  banned boolean not null default false
 );
+
+alter table public.profiles add column if not exists featured_title text not null default '';
+alter table public.profiles add column if not exists featured_description text not null default '';
+alter table public.profiles add column if not exists featured_link text not null default '';
+alter table public.profiles add column if not exists featured_banner_url text not null default '';
+alter table public.profiles add column if not exists featured_cover_url text not null default '';
+alter table public.profiles add column if not exists is_admin boolean not null default false;
+alter table public.profiles add column if not exists banned boolean not null default false;
 
 do $$
 begin
@@ -86,10 +101,13 @@ create table if not exists public.verification_requests (
   user_id uuid not null references public.profiles(id) on delete cascade,
   username text not null,
   display_name text not null,
+  reason text not null default '',
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   created_at timestamptz not null default now(),
   reviewed_at timestamptz
 );
+
+alter table public.verification_requests add column if not exists reason text not null default '';
 
 create unique index if not exists verification_requests_one_pending_per_user
   on public.verification_requests(user_id)

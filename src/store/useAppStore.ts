@@ -89,7 +89,7 @@ type AppState = {
   requestPhoneOtp: (phone: string) => Promise<void>;
   signInWithSocialProvider: (provider: "google" | "apple") => Promise<void>;
   updateProfile: (profile: ProfileUpdate) => Promise<void>;
-  requestVerification: () => Promise<void>;
+  requestVerification: (reason?: string) => Promise<void>;
   signOut: () => Promise<void>;
   createPost: (draft: DraftInput) => Promise<Post>;
   setActivePost: (id?: string) => void;
@@ -333,19 +333,23 @@ export const useAppStore = create<AppState>()(
         if (!userId) throw new Error("You must be signed in to edit your profile.");
         let avatarUrl = profile.avatarUrl;
         let bannerUrl = profile.bannerUrl;
+        let featuredBannerUrl = profile.featuredBannerUrl;
+        let featuredCoverUrl = profile.featuredCoverUrl;
         if (profile.avatarFile) avatarUrl = await uploadMediaReal(profile.avatarFile, userId, "profiles/avatar");
         if (profile.bannerFile) bannerUrl = await uploadMediaReal(profile.bannerFile, userId, "profiles/banner");
-        const updated = await updateProfileReal(userId, { ...profile, avatarUrl, bannerUrl });
+        if (profile.featuredBannerFile) featuredBannerUrl = await uploadMediaReal(profile.featuredBannerFile, userId, "profiles/featured/banner");
+        if (profile.featuredCoverFile) featuredCoverUrl = await uploadMediaReal(profile.featuredCoverFile, userId, "profiles/featured/cover");
+        const updated = await updateProfileReal(userId, { ...profile, avatarUrl, bannerUrl, featuredBannerUrl, featuredCoverUrl });
         set({
           users: get().users.map((user) => (user.id === userId ? updated : user)),
           activeProfileId: userId,
           error: undefined
         });
       },
-      requestVerification: async () => {
+      requestVerification: async (reason = "") => {
         const currentUser = get().users.find((user) => user.id === get().currentUserId);
         if (!currentUser) throw new Error("You must be signed in to request verification.");
-        await requestVerificationReal(currentUser);
+        await requestVerificationReal(currentUser, reason);
         set({ error: undefined });
       },
       signOut: async () => {

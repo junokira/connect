@@ -28,6 +28,8 @@ type Props = {
   onPinPost?: (id: string) => void;
   className?: string;
   recenterSignal?: number;
+  interactive?: boolean;
+  showControls?: boolean;
 };
 
 const clampZoom = (zoom: number) => Math.max(0.35, Math.min(2.2, zoom));
@@ -81,7 +83,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: topic + column * 214 - 428, y: (day % 9) * 28 + row * 268 - 190 };
 };
 
-export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0 }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0, interactive = true, showControls = true }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
   const didDragRef = useRef(false);
@@ -131,7 +133,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
 
   useEffect(() => {
     const node = viewportRef.current;
-    if (!node) return;
+    if (!node || !interactive) return;
 
     const handleWheel = (event: globalThis.WheelEvent) => {
       event.preventDefault();
@@ -151,7 +153,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
 
     node.addEventListener("wheel", handleWheel, { passive: false });
     return () => node.removeEventListener("wheel", handleWheel);
-  }, [scheduleView, updateSize]);
+  }, [interactive, scheduleView, updateSize]);
 
   const visibleSourcePosts = useMemo(() => posts.filter((post) => !blocks.some((block) => block.blockedId === post.authorId) && !mutes.some((mute) => mute.mutedId === post.authorId)), [blocks, mutes, posts]);
 
@@ -200,6 +202,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
 
   const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
     event.stopPropagation();
+    if (!interactive) return;
     if ((event.target as HTMLElement).closest("button,input,select,textarea,a,video")) return;
     const postElement = (event.target as HTMLElement).closest<HTMLElement>("[data-canvas-post-id]");
     updateSize();
@@ -226,6 +229,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   };
 
   const touchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!interactive) return;
     event.stopPropagation();
     if (event.touches.length !== 2) return;
     event.preventDefault();
@@ -241,13 +245,15 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   return (
     <main
       ref={viewportRef}
-      className={`canvas-viewport relative flex-1 cursor-grab overflow-hidden bg-[#f5f5f7] text-slate-950 active:cursor-grabbing dark:bg-[#050505] dark:text-white ${className}`}
+      className={`canvas-viewport relative flex-1 overflow-hidden bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white ${interactive ? "cursor-grab active:cursor-grabbing" : "cursor-default"} ${className}`}
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
       onPointerUp={pointerUp}
       onPointerCancel={pointerUp}
       onTouchMove={touchMove}
-      onTouchStart={(event) => event.stopPropagation()}
+      onTouchStart={(event) => {
+        if (interactive) event.stopPropagation();
+      }}
       onTouchEnd={() => (touchRef.current = null)}
       onClickCapture={(event) => {
         if (!didDragRef.current && !suppressClickRef.current) return;
@@ -257,7 +263,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
       }}
     >
       <div className="canvas-dots absolute inset-0" style={{ backgroundPosition: `${view.x}px ${view.y}px`, backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px` }} />
-      <button
+      {showControls ? <button
         onClick={(event) => {
           event.stopPropagation();
           centerLatest();
@@ -267,7 +273,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
       >
         <LocateFixed size={17} />
         <span className="hidden sm:inline">Latest</span>
-      </button>
+      </button> : null}
       {visibleSourcePosts.length && !visiblePosts.length ? (
         <div className="absolute left-1/2 top-24 z-20 w-[min(90vw,360px)] -translate-x-1/2 rounded-3xl border border-amber-200 bg-white/92 p-4 text-center text-sm shadow-glass backdrop-blur-xl dark:border-amber-300/20 dark:bg-[#111113]/92">
           <p className="font-bold">Posts are loaded, but the canvas is off target.</p>

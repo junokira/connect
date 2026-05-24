@@ -604,8 +604,20 @@ export default function App() {
     setCanvasView({ x: -(post.x + CANVAS_CARD_CENTER_X), y: -(post.y + CANVAS_CARD_CENTER_Y), zoom });
   }, [latest, setCanvasView]);
   const recenterCanvas = useCallback(() => {
+    setActiveProfile(undefined);
     setActiveView("canvas");
     setCanvasRecenterSignal((value) => value + 1);
+  }, [setActiveProfile]);
+  const openExplore = useCallback(() => {
+    setActiveProfile(undefined);
+    setActiveView("explore");
+  }, [setActiveProfile]);
+  const openActivity = useCallback(() => {
+    setActiveProfile(undefined);
+    setActiveView("activity");
+  }, [setActiveProfile]);
+  const openComposer = useCallback(() => {
+    setComposerOpen(true);
   }, []);
   const openPost = useCallback((id?: string) => {
     setActivePost(id);
@@ -645,9 +657,9 @@ export default function App() {
           activeView={activeView}
           unreadCount={unreadNotificationCount}
           onHome={recenterCanvas}
-          onExplore={() => setActiveView("explore")}
-          onActivity={() => setActiveView("activity")}
-          onCreate={() => setComposerOpen(true)}
+          onExplore={openExplore}
+          onActivity={openActivity}
+          onCreate={openComposer}
           onProfile={() => setActiveProfile(currentUser.id)}
           onSignOut={() => void signOut()}
         />
@@ -708,9 +720,9 @@ export default function App() {
           activeView={activeView}
           unreadCount={unreadNotificationCount}
           onHome={recenterCanvas}
-          onExplore={() => setActiveView("explore")}
-          onCreate={() => setComposerOpen(true)}
-          onActivity={() => setActiveView("activity")}
+          onExplore={openExplore}
+          onCreate={openComposer}
+          onActivity={openActivity}
           onProfile={() => setActiveProfile(currentUser.id)}
         />
       ) : null}

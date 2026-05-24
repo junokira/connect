@@ -1,10 +1,10 @@
 import { Post } from "../types";
 
-export const CANVAS_CARD_WIDTH = 320;
-export const CANVAS_CARD_HEIGHT = 430;
+export const CANVAS_CARD_WIDTH = 390;
+export const CANVAS_CARD_HEIGHT = 460;
 export const CANVAS_CARD_CENTER_X = CANVAS_CARD_WIDTH / 2;
 export const CANVAS_CARD_CENTER_Y = 178;
-export const CANVAS_CARD_GAP = 16;
+export const CANVAS_CARD_GAP = 24;
 
 type Point = { x: number; y: number };
 type CanvasLayoutItem = { post: Post; position: Point };

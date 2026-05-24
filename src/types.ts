@@ -23,6 +23,11 @@ export type User = {
   bio: string;
   location: string;
   website: string;
+  featuredTitle: string;
+  featuredDescription: string;
+  featuredLink: string;
+  featuredBannerUrl: string;
+  featuredCoverUrl: string;
   createdAt: string;
   followersCount: number;
   followingCount: number;
@@ -36,9 +41,16 @@ export type ProfileUpdate = {
   bannerUrl: string;
   avatarFile?: File;
   bannerFile?: File;
+  featuredBannerFile?: File;
+  featuredCoverFile?: File;
   bio: string;
   location: string;
   website: string;
+  featuredTitle: string;
+  featuredDescription: string;
+  featuredLink: string;
+  featuredBannerUrl: string;
+  featuredCoverUrl: string;
 };
 
 export type PostReaction = {

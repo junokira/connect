@@ -27,7 +27,7 @@ type Props = {
   onUpdateProfile: (profile: ProfileUpdate) => Promise<void>;
   onUpdatePassword: (password: string) => Promise<void>;
   onUpdateEmail: (email: string) => Promise<{ email: string; pendingEmail: string }>;
-  onRequestVerification: () => Promise<void>;
+  onRequestVerification: (reason?: string) => Promise<void>;
   onBlockUser?: (id: string) => void;
   onUnblockUser?: (id: string) => void;
   onMuteUser?: (id: string) => void;
@@ -38,7 +38,7 @@ type Props = {
 type ProfileTab = "Canvas" | "Posts" | "Media" | "Likes" | "Saved" | "Reposts";
 const tabs: ProfileTab[] = ["Canvas", "Posts", "Media", "Likes", "Saved"];
 
-function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePassword, onUpdateEmail, onRequestVerification }: { user: User; currentEmail: string; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void>; onUpdateEmail: (email: string) => Promise<{ email: string; pendingEmail: string }>; onRequestVerification: () => Promise<void> }) {
+function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePassword, onUpdateEmail, onRequestVerification }: { user: User; currentEmail: string; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void>; onUpdateEmail: (email: string) => Promise<{ email: string; pendingEmail: string }>; onRequestVerification: (reason?: string) => Promise<void> }) {
   const [form, setForm] = useState<ProfileUpdate>({
     displayName: user.displayName,
     username: user.username,
@@ -46,16 +46,24 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
     bannerUrl: user.bannerUrl,
     bio: user.bio,
     location: user.location,
-    website: user.website
+    website: user.website,
+    featuredTitle: user.featuredTitle,
+    featuredDescription: user.featuredDescription,
+    featuredLink: user.featuredLink,
+    featuredBannerUrl: user.featuredBannerUrl,
+    featuredCoverUrl: user.featuredCoverUrl
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [avatarPreview, setAvatarPreview] = useState("");
   const [bannerPreview, setBannerPreview] = useState("");
+  const [featuredBannerPreview, setFeaturedBannerPreview] = useState("");
+  const [featuredCoverPreview, setFeaturedCoverPreview] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordStatus, setPasswordStatus] = useState("");
   const [email, setEmail] = useState(currentEmail);
   const [emailStatus, setEmailStatus] = useState("");
+  const [verificationReason, setVerificationReason] = useState("");
   const [verificationStatus, setVerificationStatus] = useState("");
 
   useEffect(() => {
@@ -79,6 +87,26 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
   }, [form.bannerFile]);
 
   useEffect(() => {
+    if (!form.featuredBannerFile) {
+      setFeaturedBannerPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(form.featuredBannerFile);
+    setFeaturedBannerPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [form.featuredBannerFile]);
+
+  useEffect(() => {
+    if (!form.featuredCoverFile) {
+      setFeaturedCoverPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(form.featuredCoverFile);
+    setFeaturedCoverPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [form.featuredCoverFile]);
+
+  useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
@@ -87,7 +115,7 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
   }, [onClose]);
 
   const update = (key: keyof ProfileUpdate, value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const updateFile = (key: "avatarFile" | "bannerFile", file?: File) => setForm((current) => ({ ...current, [key]: file }));
+  const updateFile = (key: "avatarFile" | "bannerFile" | "featuredBannerFile" | "featuredCoverFile", file?: File) => setForm((current) => ({ ...current, [key]: file }));
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -160,7 +188,7 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
     try {
       setSaving(true);
       setError("");
-      await onRequestVerification();
+      await onRequestVerification(verificationReason);
       setVerificationStatus("Verification request sent.");
     } catch (verificationError) {
       setError(verificationError instanceof Error ? verificationError.message : "Could not request verification.");
@@ -222,6 +250,35 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
           <textarea value={form.bio} onChange={(event) => update("bio", event.target.value)} className="min-h-28 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" />
         </label>
         <div className="mt-4 rounded-2xl border border-slate-200 p-4 dark:border-white/10">
+          <p className="text-sm font-bold">Spotlight</p>
+          <p className="mt-1 text-sm text-slate-500">Feature your current work, drop, project, or link on your profile.</p>
+          <div className="mt-3 overflow-hidden rounded-3xl bg-slate-100 dark:bg-white/10">
+            <div className="aspect-[3/1] bg-slate-200 dark:bg-white/10">
+              {(featuredBannerPreview || form.featuredBannerUrl) ? <img className="h-full w-full object-cover" src={featuredBannerPreview || form.featuredBannerUrl} alt="" /> : null}
+            </div>
+            <div className="-mt-10 flex items-end gap-3 p-4">
+              <div className="h-24 w-24 overflow-hidden rounded-2xl border-4 border-white bg-white shadow-xl dark:border-[#0f1115] dark:bg-[#0f1115]">
+                {(featuredCoverPreview || form.featuredCoverUrl) ? <img className="h-full w-full object-cover" src={featuredCoverPreview || form.featuredCoverUrl} alt="" /> : null}
+              </div>
+              <div className="flex flex-wrap gap-2 pb-1">
+                <label className="cursor-pointer rounded-full bg-white/90 px-3 py-2 text-xs font-bold shadow-glass dark:bg-slate-950/80">
+                  Banner image
+                  <input className="sr-only" type="file" accept="image/*" onChange={(event) => updateFile("featuredBannerFile", event.target.files?.[0])} />
+                </label>
+                <label className="cursor-pointer rounded-full bg-white/90 px-3 py-2 text-xs font-bold shadow-glass dark:bg-slate-950/80">
+                  Cover image
+                  <input className="sr-only" type="file" accept="image/*" onChange={(event) => updateFile("featuredCoverFile", event.target.files?.[0])} />
+                </label>
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <input value={form.featuredTitle} onChange={(event) => update("featuredTitle", event.target.value)} className="rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Title" />
+            <input value={form.featuredLink} onChange={(event) => update("featuredLink", event.target.value)} className="rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="External link" />
+          </div>
+          <textarea value={form.featuredDescription} onChange={(event) => update("featuredDescription", event.target.value)} className="mt-3 min-h-20 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Short description" />
+        </div>
+        <div className="mt-4 rounded-2xl border border-slate-200 p-4 dark:border-white/10">
           <p className="text-sm font-bold">Email</p>
           <p className="mt-1 text-sm text-slate-500">Change the email you use to sign in. Supabase may ask you to confirm the new address before it takes effect.</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -243,7 +300,10 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
           <p className="text-sm font-bold">Verification</p>
           <p className="mt-1 text-sm text-slate-500">{user.verified ? "This profile is verified." : "Request review for a CONNECT verification badge."}</p>
           {!user.verified ? (
-            <button type="button" disabled={saving} onClick={() => void requestVerification()} className="mt-3 rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold disabled:opacity-50 dark:border-white/15">Request verification</button>
+            <>
+              <textarea value={verificationReason} onChange={(event) => setVerificationReason(event.target.value)} className="mt-3 min-h-20 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 text-sm outline-none focus:border-teal-500 dark:border-white/10" placeholder="Why should this profile be verified?" />
+              <button type="button" disabled={saving} onClick={() => void requestVerification()} className="mt-3 rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold disabled:opacity-50 dark:border-white/15">Request verification</button>
+            </>
           ) : null}
           {verificationStatus ? <p className="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-300">{verificationStatus}</p> : null}
         </div>
@@ -338,6 +398,11 @@ export function ProfileView({ user, currentUserId, currentUserEmail, users, post
           activeTab === "Reposts" ? profileData.repostedPosts :
             profileData.userPosts;
   const websiteUrl = user.website ? normalizeExternalUrl(user.website) : "";
+  const featuredUrl = user.featuredLink ? normalizeExternalUrl(user.featuredLink) : "";
+  const hasFeatured = Boolean(user.featuredTitle || user.featuredDescription || user.featuredLink || user.featuredBannerUrl || user.featuredCoverUrl);
+  const discoveryUsers = users
+    .filter((candidate) => candidate.id !== currentUserId && candidate.id !== user.id && !blocks.some((block) => block.blockedId === candidate.id))
+    .slice(0, 6);
   const touchStart = (event: TouchEvent) => {
     const touch = event.touches[0];
     const target = event.target as HTMLElement;
@@ -354,7 +419,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, users, post
   };
 
   return (
-    <div ref={scrollerRef} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter fixed inset-0 z-50 overflow-y-auto bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white">
+    <div ref={scrollerRef} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter fixed inset-0 z-20 overflow-y-auto bg-[#f5f5f7] pb-24 text-slate-950 dark:bg-[#050505] dark:text-white lg:left-72 lg:pb-0">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
         <div>
           <p className="flex items-center gap-1 font-bold">
@@ -466,11 +531,17 @@ export function ProfileView({ user, currentUserId, currentUserEmail, users, post
         <section className="px-4 py-6">
           {activeTab === "Canvas" ? (
             <div className={canvasFullscreen ? "fixed inset-0 z-[55] overflow-hidden bg-[#f5f5f7] dark:bg-[#050505]" : "relative h-[70vh] min-h-[480px] overflow-hidden rounded-3xl border border-slate-200 shadow-glass dark:border-white/10"}>
-              <button onClick={() => setCanvasFullscreen((value) => !value)} className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88" aria-label="Toggle profile canvas fullscreen">
+              <button onClick={() => setCanvasFullscreen((value) => !value)} className="absolute right-3 top-3 z-30 flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88" aria-label="Toggle profile canvas fullscreen">
                 {canvasFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                <span>{canvasFullscreen ? "Minimize" : "Open canvas"}</span>
               </button>
               {canvasFullscreen ? <button onClick={() => setCanvasFullscreen(false)} className="absolute left-3 top-3 z-30 rounded-xl border border-slate-200 bg-white/88 px-3 py-2 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88">Back to profile</button> : null}
-              <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="classic" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={onOpenPost} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" />
+              {!canvasFullscreen ? (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[#f5f5f7] via-[#f5f5f7]/70 to-transparent p-5 text-sm font-semibold text-slate-500 dark:from-[#050505] dark:via-[#050505]/70">
+                  Preview only. Open canvas to pan and zoom.
+                </div>
+              ) : null}
+              <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="gallery" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={onOpenPost} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" interactive={canvasFullscreen} showControls={canvasFullscreen} />
             </div>
           ) : activeTab === "Media" ? (
             <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-3">
@@ -493,6 +564,60 @@ export function ProfileView({ user, currentUserId, currentUserEmail, users, post
             </div>
           )}
         </section>
+        {hasFeatured ? (
+          <section className="px-4 pb-6">
+            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-glass dark:border-white/10 dark:bg-[#111113]">
+              <div className="relative aspect-[3/1] bg-slate-100 dark:bg-white/10">
+                {user.featuredBannerUrl ? <img className="h-full w-full object-cover" src={user.featuredBannerUrl} alt="" loading="lazy" /> : null}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                <p className="absolute left-5 top-5 rounded-full bg-white/90 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-950 shadow-glass backdrop-blur">Spotlight</p>
+              </div>
+              <div className="flex flex-col gap-4 p-5 sm:-mt-16 sm:flex-row sm:items-end">
+                <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-3xl border-4 border-white bg-slate-100 shadow-2xl dark:border-[#111113] dark:bg-white/10">
+                  {user.featuredCoverUrl ? <img className="h-full w-full object-cover" src={user.featuredCoverUrl} alt="" loading="lazy" /> : null}
+                </div>
+                <div className="relative min-w-0 flex-1">
+                  <h2 className="text-2xl font-black">{user.featuredTitle || "Current work"}</h2>
+                  {user.featuredDescription ? <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">{user.featuredDescription}</p> : null}
+                  {featuredUrl ? (
+                    <a href={featuredUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">
+                      Open link <LinkIcon size={15} />
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
+        {discoveryUsers.length ? (
+          <section className="px-4 pb-10">
+            <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-glass dark:border-white/10 dark:bg-[#111113]">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-lg font-black">People to discover</h2>
+                <span className="text-xs font-semibold text-slate-500">Suggested from CONNECT</span>
+              </div>
+              <div className="grid gap-2">
+                {discoveryUsers.map((candidate) => {
+                  const followingCandidate = follows.some((follow) => follow.followerId === currentUserId && follow.followingId === candidate.id);
+                  return (
+                    <div key={candidate.id} className="flex items-center gap-3 rounded-2xl p-2 hover:bg-slate-100 dark:hover:bg-white/10">
+                      <button onClick={() => onOpenProfile(candidate.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                        <img className="h-12 w-12 rounded-full object-cover" src={candidate.avatarUrl} alt="" />
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1 truncate text-sm font-bold">{candidate.displayName}<VerifiedBadge verified={candidate.verified} size={14} /></span>
+                          <span className="block truncate text-xs text-slate-500">@{candidate.username}</span>
+                        </span>
+                      </button>
+                      <button onClick={() => onFollowUser(candidate.id)} className={`rounded-full px-4 py-2 text-xs font-bold ${followingCandidate ? "border border-slate-300 dark:border-white/15" : "bg-slate-950 text-white dark:bg-white dark:text-slate-950"}`}>
+                        {followingCandidate ? "Following" : "Follow"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        ) : null}
       </div>
       {editing ? <EditProfileDialog user={user} currentEmail={currentUserEmail} onClose={() => setEditing(false)} onSave={onUpdateProfile} onUpdatePassword={onUpdatePassword} onUpdateEmail={onUpdateEmail} onRequestVerification={onRequestVerification} /> : null}
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
