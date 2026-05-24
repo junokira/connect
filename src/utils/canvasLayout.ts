@@ -4,7 +4,7 @@ export const CANVAS_CARD_WIDTH = 320;
 export const CANVAS_CARD_HEIGHT = 430;
 export const CANVAS_CARD_CENTER_X = CANVAS_CARD_WIDTH / 2;
 export const CANVAS_CARD_CENTER_Y = 178;
-export const CANVAS_CARD_GAP = 12;
+export const CANVAS_CARD_GAP = 16;
 
 type Point = { x: number; y: number };
 type CanvasLayoutItem = { post: Post; position: Point };
@@ -46,10 +46,29 @@ export function resolveCanvasCollisions(items: CanvasLayoutItem[]) {
   });
 }
 
-export function nextCanvasPosition(posts: Post[]) {
+export function nextCanvasPosition(posts: Post[], newPostHashtags?: string[]) {
   if (!posts.length) return { x: 0, y: 0 };
 
   const occupied = posts.map((post) => ({ x: post.x, y: post.y }));
+  if (newPostHashtags?.length) {
+    const related2 = posts.filter((post) => post.hashtags.filter((tag) => newPostHashtags.includes(tag)).length >= 2);
+    const related1 = related2.length ? [] : posts.filter((post) => post.hashtags.some((tag) => newPostHashtags.includes(tag)));
+    const relatedGroup = related2.length ? related2 : related1;
+    if (relatedGroup.length) {
+      const cx = relatedGroup.reduce((sum, post) => sum + post.x, 0) / relatedGroup.length;
+      const cy = relatedGroup.reduce((sum, post) => sum + post.y, 0) / relatedGroup.length;
+      for (let ring = 1; ring < 10; ring += 1) {
+        for (let dx = -ring; dx <= ring; dx += 1) {
+          for (let dy = -ring; dy <= ring; dy += 1) {
+            if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+            const candidate = { x: Math.round(cx + dx * stepX), y: Math.round(cy + dy * stepY) };
+            if (!occupied.some((other) => canvasRectsOverlap(candidate, other))) return candidate;
+          }
+        }
+      }
+    }
+  }
+
   const latest = [...posts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
   const base = latest ? { x: latest.x, y: latest.y } : { x: 0, y: 0 };
 

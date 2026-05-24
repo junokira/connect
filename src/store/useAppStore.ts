@@ -2,11 +2,21 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { isSupabaseConfigured } from "../lib/supabase";
 import {
-  addCommentReal,
+  addCommentRealExtended,
+  blockUserReal,
   completeAuthRedirect,
+  createNotification,
   createPostReal,
+  createReportReal,
+  deleteCommentReal,
+  deletePostReal,
   getSessionUserId,
+  likeCommentReal,
+  loadBlocksAndMutes,
   loadConnectData,
+  loadNotifications as loadNotificationsReal,
+  markNotificationsRead as markNotificationsReadReal,
+  muteUserReal,
   reactToPostReal,
   requestVerificationReal,
   sendMagicLink,
@@ -17,11 +27,14 @@ import {
   signOutReal,
   signUpWithPassword,
   toggleFollowReal,
+  unblockUserReal,
+  unmuteUserReal,
   updatePasswordReal,
+  updatePostReal,
   updateProfileReal,
   uploadMediaReal
 } from "../lib/supabaseData";
-import { CanvasView, Comment, FeedStyle, Follow, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, SortMode, User } from "../types";
+import { CanvasView, Comment, CommentReaction, FeedStyle, Follow, Notification, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, SortMode, User, UserBlock, UserMute } from "../types";
 import { placeNextPost } from "../utils/placement";
 
 type DraftInput = {
@@ -33,6 +46,10 @@ type DraftInput = {
   thumbnailUrl?: string;
   mediaFile?: File;
   thumbnailFile?: File;
+  sourceUrl?: string;
+  sourcePlatform?: Post["sourcePlatform"];
+  sourceTitle?: string;
+  sourceThumb?: string;
 };
 
 type AppState = {
@@ -40,7 +57,12 @@ type AppState = {
   posts: Post[];
   comments: Comment[];
   reactions: PostReaction[];
+  commentReactions: CommentReaction[];
   follows: Follow[];
+  notifications: Notification[];
+  unreadNotificationCount: number;
+  blocks: UserBlock[];
+  mutes: UserMute[];
   currentUserId: string;
   authed: boolean;
   backendMode: "supabase";
@@ -75,25 +97,60 @@ type AppState = {
   likePost: (id: string) => Promise<void>;
   repostPost: (id: string) => Promise<void>;
   bookmarkPost: (id: string) => Promise<void>;
-  addComment: (postId: string, content: string) => Promise<void>;
+  updatePost: (id: string, patch: { content?: string; caption?: string }) => Promise<void>;
+  deletePost: (id: string) => Promise<void>;
+  deleteComment: (commentId: string, postId: string) => Promise<void>;
+  addCommentExtended: (postId: string, content: string, options?: { gifUrl?: string; parentId?: string }) => Promise<void>;
+  likeComment: (commentId: string) => Promise<void>;
+  loadNotifications: () => Promise<void>;
+  markNotificationsRead: () => Promise<void>;
+  blockUser: (userId: string) => Promise<void>;
+  unblockUser: (userId: string) => Promise<void>;
+  muteUser: (userId: string) => Promise<void>;
+  unmuteUser: (userId: string) => Promise<void>;
+  reportPost: (postId: string, category: string, note?: string) => Promise<void>;
+  reportUser: (userId: string, category: string, note?: string) => Promise<void>;
+  pinPost: (postId: string) => Promise<void>;
   followUser: (id: string) => Promise<void>;
   toggleTheme: () => void;
 };
 
 const extractHashtags = (value: string) => [...value.matchAll(/#([a-z0-9_]+)/gi)].map((match) => match[1].toLowerCase());
+const emptyExtras = { blocks: [] as UserBlock[], mutes: [] as UserMute[] };
+const loadSafeExtras = async (userId?: string) => {
+  if (!userId) return emptyExtras;
+  try {
+    return await loadBlocksAndMutes(userId);
+  } catch {
+    return emptyExtras;
+  }
+};
+const loadSafeNotifications = async (userId?: string) => {
+  if (!userId) return [] as Notification[];
+  try {
+    return await loadNotificationsReal(userId);
+  } catch {
+    return [] as Notification[];
+  }
+};
 
 const makePost = (draft: DraftInput, posts: Post[], authorId: string): Post => {
   const now = new Date().toISOString();
-  const position = placeNextPost(posts);
+  const hashtags = extractHashtags(`${draft.content} ${draft.caption}`);
+  const position = placeNextPost(posts, hashtags);
   return {
     id: crypto.randomUUID(),
     authorId,
     type: draft.type,
-    content: draft.type === "text" ? draft.content : "",
-    caption: draft.type === "text" ? "" : draft.caption,
+    content: draft.type === "text" || draft.type === "link" ? draft.content : "",
+    caption: draft.type === "text" || draft.type === "link" ? "" : draft.caption,
     imageUrl: draft.imageUrl,
     videoUrl: draft.videoUrl,
     thumbnailUrl: draft.thumbnailUrl || draft.imageUrl,
+    sourceUrl: draft.sourceUrl,
+    sourcePlatform: draft.sourcePlatform,
+    sourceTitle: draft.sourceTitle,
+    sourceThumb: draft.sourceThumb,
     x: position.x,
     y: position.y,
     createdAt: now,
@@ -102,7 +159,7 @@ const makePost = (draft: DraftInput, posts: Post[], authorId: string): Post => {
     commentsCount: 0,
     repostsCount: 0,
     bookmarksCount: 0,
-    hashtags: extractHashtags(`${draft.content} ${draft.caption}`)
+    hashtags
   };
 };
 
@@ -113,7 +170,12 @@ export const useAppStore = create<AppState>()(
       posts: [],
       comments: [],
       reactions: [],
+      commentReactions: [],
       follows: [],
+      notifications: [],
+      unreadNotificationCount: 0,
+      blocks: [],
+      mutes: [],
       currentUserId: "",
       authed: false,
       backendMode: "supabase",
@@ -141,8 +203,13 @@ export const useAppStore = create<AppState>()(
           const redirectedUserId = await completeAuthRedirect();
           const userId = redirectedUserId || (await getSessionUserId());
           const data = await loadConnectData();
+          const extras = await loadSafeExtras(userId);
+          const notifications = await loadSafeNotifications(userId);
           set({
             ...data,
+            ...extras,
+            notifications,
+            unreadNotificationCount: notifications.filter((notification) => !notification.read).length,
             currentUserId: userId || "",
             authed: Boolean(userId),
             loading: false
@@ -154,7 +221,10 @@ export const useAppStore = create<AppState>()(
       refreshData: async () => {
         if (!isSupabaseConfigured) throw new Error("Supabase is not configured.");
         const data = await loadConnectData();
-        set(data);
+        const userId = get().currentUserId;
+        const extras = await loadSafeExtras(userId);
+        const notifications = await loadSafeNotifications(userId);
+        set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length });
       },
       signIn: async (email, password) => {
         if (!isSupabaseConfigured) {
@@ -165,7 +235,9 @@ export const useAppStore = create<AppState>()(
           set({ loading: true, error: undefined });
           const userId = await signInWithPassword(email, password);
           const data = await loadConnectData();
-          set({ ...data, currentUserId: userId, authed: true, loading: false });
+          const extras = await loadSafeExtras(userId);
+          const notifications = await loadSafeNotifications(userId);
+          set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, currentUserId: userId, authed: true, loading: false });
         } catch (error) {
           set({ error: error instanceof Error ? error.message : "Unable to sign in.", loading: false });
         }
@@ -183,7 +255,9 @@ export const useAppStore = create<AppState>()(
             return false;
           }
           const data = await loadConnectData();
-          set({ ...data, currentUserId: userId, activeProfileId: userId, authed: true, loading: false });
+          const extras = await loadSafeExtras(userId);
+          const notifications = await loadSafeNotifications(userId);
+          set({ ...data, ...extras, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, currentUserId: userId, activeProfileId: userId, authed: true, loading: false });
           return true;
         } catch (error) {
           set({ error: error instanceof Error ? error.message : "Unable to create your account.", loading: false });
@@ -303,6 +377,8 @@ export const useAppStore = create<AppState>()(
         });
         try {
           const result = await reactToPostReal(id, userId, "like");
+          const target = get().posts.find((post) => post.id === id);
+          if (result.active && target) void createNotification({ recipientId: target.authorId, actorId: userId, type: "like", postId: id });
           set({
             reactions: result.active ? [result.reaction, ...get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "like"))] : get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "like")),
             error: undefined
@@ -327,6 +403,8 @@ export const useAppStore = create<AppState>()(
         });
         try {
           const result = await reactToPostReal(id, userId, "repost");
+          const target = get().posts.find((post) => post.id === id);
+          if (result.active && target) void createNotification({ recipientId: target.authorId, actorId: userId, type: "repost", postId: id });
           set({
             reactions: result.active ? [result.reaction, ...get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "repost"))] : get().reactions.filter((reaction) => !(reaction.postId === id && reaction.userId === userId && reaction.type === "repost")),
             error: undefined
@@ -363,20 +441,144 @@ export const useAppStore = create<AppState>()(
           set({ error: error instanceof Error ? error.message : "Could not bookmark this post." });
         }
       },
-      addComment: async (postId, content) => {
+      updatePost: async (id, patch) => {
+        const previous = get().posts;
+        const target = previous.find((post) => post.id === id);
+        if (!target) throw new Error("Post not found.");
+        const nextPatch = target.type === "text" || target.type === "link" ? { content: patch.content ?? target.content } : { caption: patch.caption ?? patch.content ?? target.caption };
+        set({ posts: previous.map((post) => (post.id === id ? { ...post, ...nextPatch, updatedAt: new Date().toISOString() } : post)), error: undefined });
+        try {
+          const saved = await updatePostReal(id, nextPatch);
+          set({ posts: get().posts.map((post) => (post.id === id ? saved : post)), error: undefined });
+        } catch (error) {
+          set({ posts: previous, error: error instanceof Error ? error.message : "Could not update post." });
+        }
+      },
+      deletePost: async (id) => {
+        const previous = get().posts;
+        set({ posts: previous.filter((post) => post.id !== id), activePostId: get().activePostId === id ? undefined : get().activePostId, error: undefined });
+        try {
+          await deletePostReal(id);
+        } catch (error) {
+          set({ posts: previous, error: error instanceof Error ? error.message : "Could not delete post." });
+        }
+      },
+      deleteComment: async (commentId, postId) => {
+        const previousComments = get().comments;
+        const removed = previousComments.find((comment) => comment.id === commentId);
+        set({
+          comments: previousComments.filter((comment) => comment.id !== commentId && comment.parentId !== commentId),
+          posts: get().posts.map((post) => (post.id === postId && !removed?.parentId ? { ...post, commentsCount: Math.max(0, post.commentsCount - 1) } : post)),
+          error: undefined
+        });
+        try {
+          await deleteCommentReal(commentId, postId);
+        } catch (error) {
+          set({ comments: previousComments, error: error instanceof Error ? error.message : "Could not delete comment." });
+        }
+      },
+      addCommentExtended: async (postId, content, options) => {
         if (!get().currentUserId) throw new Error("You must be signed in to comment.");
         const comment: Comment = {
           id: crypto.randomUUID(),
           postId,
           authorId: get().currentUserId,
           content,
+          gifUrl: options?.gifUrl,
+          parentId: options?.parentId,
+          likesCount: 0,
           createdAt: new Date().toISOString()
         };
-        const savedComment = await addCommentReal(comment);
+        const savedComment = await addCommentRealExtended(comment);
+        const post = get().posts.find((candidate) => candidate.id === postId);
+        const parent = options?.parentId ? get().comments.find((candidate) => candidate.id === options.parentId) : undefined;
         set({
           comments: [savedComment, ...get().comments],
-          posts: get().posts.map((post) => (post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post))
+          posts: get().posts.map((item) => (item.id === postId && !options?.parentId ? { ...item, commentsCount: item.commentsCount + 1 } : item))
         });
+        if (post) void createNotification({ recipientId: post.authorId, actorId: get().currentUserId, type: "comment", postId, commentId: savedComment.id });
+        if (parent) void createNotification({ recipientId: parent.authorId, actorId: get().currentUserId, type: "reply", postId, commentId: savedComment.id });
+        const mentioned = [...new Set([...content.matchAll(/@([a-zA-Z0-9_]+)/g)].map((match) => match[1].toLowerCase()))];
+        mentioned.forEach((username) => {
+          const user = get().users.find((candidate) => candidate.username.toLowerCase() === username);
+          if (user) void createNotification({ recipientId: user.id, actorId: get().currentUserId, type: "mention", postId, commentId: savedComment.id });
+        });
+      },
+      likeComment: async (commentId) => {
+        const userId = get().currentUserId;
+        if (!userId) throw new Error("You must be signed in to like comments.");
+        const existing = get().commentReactions.find((reaction) => reaction.commentId === commentId && reaction.userId === userId);
+        const optimistic: CommentReaction = existing || { commentId, userId, type: "like", createdAt: new Date().toISOString() };
+        set({
+          commentReactions: existing ? get().commentReactions.filter((reaction) => !(reaction.commentId === commentId && reaction.userId === userId)) : [optimistic, ...get().commentReactions],
+          comments: get().comments.map((comment) => (comment.id === commentId ? { ...comment, likesCount: Math.max(0, comment.likesCount + (existing ? -1 : 1)) } : comment)),
+          error: undefined
+        });
+        try {
+          await likeCommentReal(commentId, userId);
+        } catch (error) {
+          set({
+            commentReactions: existing ? [existing, ...get().commentReactions.filter((reaction) => !(reaction.commentId === commentId && reaction.userId === userId))] : get().commentReactions.filter((reaction) => !(reaction.commentId === commentId && reaction.userId === userId)),
+            comments: get().comments.map((comment) => (comment.id === commentId ? { ...comment, likesCount: Math.max(0, comment.likesCount + (existing ? 1 : -1)) } : comment)),
+            error: error instanceof Error ? error.message : "Could not like comment."
+          });
+        }
+      },
+      loadNotifications: async () => {
+        const userId = get().currentUserId;
+        if (!userId) return;
+        const notifications = await loadNotificationsReal(userId);
+        set({ notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length });
+      },
+      markNotificationsRead: async () => {
+        const userId = get().currentUserId;
+        if (!userId) return;
+        set({ notifications: get().notifications.map((notification) => ({ ...notification, read: true })), unreadNotificationCount: 0 });
+        await markNotificationsReadReal(userId);
+      },
+      blockUser: async (id) => {
+        const userId = get().currentUserId;
+        if (!userId || userId === id) return;
+        const block: UserBlock = { blockerId: userId, blockedId: id, createdAt: new Date().toISOString() };
+        set({ blocks: [block, ...get().blocks.filter((item) => item.blockedId !== id)], follows: get().follows.filter((follow) => !(follow.followerId === userId && follow.followingId === id)) });
+        await blockUserReal(userId, id);
+      },
+      unblockUser: async (id) => {
+        const userId = get().currentUserId;
+        if (!userId) return;
+        set({ blocks: get().blocks.filter((item) => item.blockedId !== id) });
+        await unblockUserReal(userId, id);
+      },
+      muteUser: async (id) => {
+        const userId = get().currentUserId;
+        if (!userId || userId === id) return;
+        const mute: UserMute = { muterId: userId, mutedId: id, createdAt: new Date().toISOString() };
+        set({ mutes: [mute, ...get().mutes.filter((item) => item.mutedId !== id)] });
+        await muteUserReal(userId, id);
+      },
+      unmuteUser: async (id) => {
+        const userId = get().currentUserId;
+        if (!userId) return;
+        set({ mutes: get().mutes.filter((item) => item.mutedId !== id) });
+        await unmuteUserReal(userId, id);
+      },
+      reportPost: async (postId, category, note) => {
+        if (!get().currentUserId) throw new Error("You must be signed in to report posts.");
+        await createReportReal(get().currentUserId, postId, undefined, category, note);
+      },
+      reportUser: async (userId, category, note) => {
+        if (!get().currentUserId) throw new Error("You must be signed in to report users.");
+        await createReportReal(get().currentUserId, undefined, userId, category, note);
+      },
+      pinPost: async (postId) => {
+        const previous = get().posts;
+        set({ posts: previous.map((post) => (post.id === postId ? { ...post, pinned: true, x: 0, y: 0 } : post)) });
+        try {
+          const updated = await updatePostReal(postId, { pinned: true, x: 0, y: 0 });
+          set({ posts: get().posts.map((post) => (post.id === postId ? updated : post)) });
+        } catch (error) {
+          set({ posts: previous, error: error instanceof Error ? error.message : "Could not pin post." });
+        }
       },
       followUser: async (id) => {
         const userId = get().currentUserId;
@@ -395,6 +597,7 @@ export const useAppStore = create<AppState>()(
         });
         try {
           const result = await toggleFollowReal(userId, id);
+          if (result.active) void createNotification({ recipientId: id, actorId: userId, type: "follow" });
           set({
             follows: result.active ? [result.follow, ...get().follows.filter((follow) => !(follow.followerId === userId && follow.followingId === id))] : get().follows.filter((follow) => !(follow.followerId === userId && follow.followingId === id)),
             error: undefined

@@ -1,4 +1,4 @@
-import { Comment, Follow, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, User } from "../types";
+import { Comment, CommentReaction, Follow, Notification, OGPreview, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, User, UserBlock, UserMute } from "../types";
 import { supabase } from "./supabase";
 
 type ProfileRow = {
@@ -25,6 +25,11 @@ type PostRow = {
   image_url?: string | null;
   video_url?: string | null;
   thumbnail_url?: string | null;
+  source_url?: string | null;
+  source_platform?: string | null;
+  source_title?: string | null;
+  source_thumb?: string | null;
+  muted?: boolean | null;
   x?: number | null;
   y?: number | null;
   created_at: string;
@@ -42,6 +47,16 @@ type CommentRow = {
   post_id: string;
   author_id: string;
   content: string;
+  gif_url?: string | null;
+  parent_id?: string | null;
+  likes_count?: number | null;
+  created_at: string;
+};
+
+type CommentReactionRow = {
+  comment_id: string;
+  user_id: string;
+  type: "like";
   created_at: string;
 };
 
@@ -55,6 +70,29 @@ type ReactionRow = {
 type FollowRow = {
   follower_id: string;
   following_id: string;
+  created_at: string;
+};
+
+type NotificationRow = {
+  id: string;
+  recipient_id: string;
+  actor_id: string;
+  type: Notification["type"];
+  post_id?: string | null;
+  comment_id?: string | null;
+  read: boolean;
+  created_at: string;
+};
+
+type UserBlockRow = {
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+};
+
+type UserMuteRow = {
+  muter_id: string;
+  muted_id: string;
   created_at: string;
 };
 
@@ -84,6 +122,11 @@ const toPost = (row: PostRow): Post => ({
   imageUrl: row.image_url || undefined,
   videoUrl: row.video_url || undefined,
   thumbnailUrl: row.thumbnail_url || undefined,
+  sourceUrl: row.source_url || undefined,
+  sourcePlatform: (row.source_platform as Post["sourcePlatform"]) || undefined,
+  sourceTitle: row.source_title || undefined,
+  sourceThumb: row.source_thumb || undefined,
+  muted: row.muted || false,
   x: Number.isFinite(row.x) ? Number(row.x) : 0,
   y: Number.isFinite(row.y) ? Number(row.y) : 0,
   createdAt: row.created_at,
@@ -137,6 +180,16 @@ const toComment = (row: CommentRow): Comment => ({
   postId: row.post_id,
   authorId: row.author_id,
   content: row.content,
+  gifUrl: row.gif_url || undefined,
+  parentId: row.parent_id || undefined,
+  likesCount: row.likes_count ?? 0,
+  createdAt: row.created_at
+});
+
+const toCommentReaction = (row: CommentReactionRow): CommentReaction => ({
+  commentId: row.comment_id,
+  userId: row.user_id,
+  type: row.type,
   createdAt: row.created_at
 });
 
@@ -391,13 +444,15 @@ export async function loadConnectData() {
     { data: posts, error: postsError },
     { data: comments, error: commentsError },
     { data: reactions, error: reactionsError },
-    { data: follows, error: followsError }
+    { data: follows, error: followsError },
+    { data: commentReactions, error: commentReactionsError }
   ] = await Promise.all([
     client.from("profiles").select("*").order("created_at", { ascending: true }),
     client.from("posts").select("*").order("created_at", { ascending: false }),
     client.from("comments").select("*").order("created_at", { ascending: false }),
     client.from("post_reactions").select("*").order("created_at", { ascending: false }),
-    client.from("follows").select("*").order("created_at", { ascending: false })
+    client.from("follows").select("*").order("created_at", { ascending: false }),
+    client.from("comment_reactions").select("*").order("created_at", { ascending: false })
   ]);
 
   if (profilesError) throw profilesError;
@@ -405,9 +460,11 @@ export async function loadConnectData() {
   if (commentsError) throw commentsError;
   if (reactionsError) throw reactionsError;
   if (followsError) throw followsError;
+  if (commentReactionsError && !/relation .*comment_reactions/i.test(commentReactionsError.message)) throw commentReactionsError;
 
   const mappedComments = (comments || []).map((row) => toComment(row as CommentRow));
   const mappedReactions = (reactions || []).map((row) => toReaction(row as ReactionRow));
+  const mappedCommentReactions = commentReactionsError ? [] : (commentReactions || []).map((row) => toCommentReaction(row as CommentReactionRow));
   const mappedFollows = (follows || []).map((row) => toFollow(row as FollowRow));
   const users = (profiles || []).map((row) => {
     const user = toUser(row as ProfileRow);
@@ -428,9 +485,13 @@ export async function loadConnectData() {
   return {
     users,
     posts: countedPosts,
-    comments: mappedComments,
+    comments: mappedComments.map((comment) => ({
+      ...comment,
+      likesCount: mappedCommentReactions.filter((reaction) => reaction.commentId === comment.id).length
+    })),
     reactions: mappedReactions,
-    follows: mappedFollows
+    follows: mappedFollows,
+    commentReactions: mappedCommentReactions
   };
 }
 
@@ -447,6 +508,10 @@ export async function createPostReal(post: Post) {
       image_url: post.imageUrl,
       video_url: post.videoUrl,
       thumbnail_url: post.thumbnailUrl,
+      source_url: post.sourceUrl,
+      source_platform: post.sourcePlatform,
+      source_title: post.sourceTitle,
+      source_thumb: post.sourceThumb,
       x: post.x,
       y: post.y,
       hashtags: post.hashtags
@@ -455,6 +520,26 @@ export async function createPostReal(post: Post) {
     .single();
   if (error) throw error;
   return toPost(data as PostRow);
+}
+
+export async function updatePostReal(postId: string, patch: { content?: string; caption?: string; hashtags?: string[]; muted?: boolean; pinned?: boolean; x?: number; y?: number }) {
+  const client = requireSupabase();
+  const userId = (await client.auth.getUser()).data.user?.id ?? "";
+  const { data, error } = await client
+    .from("posts")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", postId)
+    .eq("author_id", userId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return toPost(data as PostRow);
+}
+
+export async function deletePostReal(postId: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("posts").delete().eq("id", postId);
+  if (error) throw error;
 }
 
 export async function reactToPostReal(postId: string, userId: string, type: "like" | "repost" | "bookmark") {
@@ -482,16 +567,160 @@ export async function reactToPostReal(postId: string, userId: string, type: "lik
   return { reaction: toReaction(data as ReactionRow), active: true };
 }
 
-export async function addCommentReal(comment: Comment) {
+export async function deleteCommentReal(commentId: string, postId: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("comments").delete().eq("id", commentId);
+  if (error) throw error;
+  await client.rpc("decrement_post_comments", { target_post_id: postId });
+}
+
+export async function addCommentRealExtended(comment: Comment) {
   const client = requireSupabase();
   const { data, error } = await client
     .from("comments")
-    .insert({ id: comment.id, post_id: comment.postId, author_id: comment.authorId, content: comment.content })
+    .insert({
+      id: comment.id,
+      post_id: comment.postId,
+      author_id: comment.authorId,
+      content: comment.content,
+      gif_url: comment.gifUrl || null,
+      parent_id: comment.parentId || null
+    })
     .select("*")
     .single();
   if (error) throw error;
-  await client.rpc("increment_post_counter", { target_post_id: comment.postId, counter_name: "comments_count" });
+  if (!comment.parentId) await client.rpc("increment_post_counter", { target_post_id: comment.postId, counter_name: "comments_count" });
   return toComment(data as CommentRow);
+}
+
+export const addCommentReal = addCommentRealExtended;
+
+export async function likeCommentReal(commentId: string, userId: string) {
+  const client = requireSupabase();
+  const { data: existing, error: existingError } = await client.from("comment_reactions").select("*").eq("comment_id", commentId).eq("user_id", userId).maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) {
+    const { error } = await client.from("comment_reactions").delete().eq("comment_id", commentId).eq("user_id", userId);
+    if (error) throw error;
+    await client.rpc("adjust_comment_likes", { target_comment_id: commentId, amount: -1 });
+    return { active: false };
+  }
+  const { error } = await client.from("comment_reactions").insert({ comment_id: commentId, user_id: userId, type: "like" });
+  if (error) throw error;
+  await client.rpc("adjust_comment_likes", { target_comment_id: commentId, amount: 1 });
+  return { active: true };
+}
+
+export async function loadNotifications(userId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("notifications").select("*").eq("recipient_id", userId).order("created_at", { ascending: false }).limit(60);
+  if (error) throw error;
+  return ((data || []) as NotificationRow[]).map((row) => ({
+    id: row.id,
+    recipientId: row.recipient_id,
+    actorId: row.actor_id,
+    type: row.type,
+    postId: row.post_id || undefined,
+    commentId: row.comment_id || undefined,
+    read: row.read,
+    createdAt: row.created_at
+  }) as Notification);
+}
+
+export async function markNotificationsRead(userId: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("notifications").update({ read: true }).eq("recipient_id", userId).eq("read", false);
+  if (error) throw error;
+}
+
+export async function createNotification(n: Omit<Notification, "id" | "createdAt" | "read">) {
+  const client = requireSupabase();
+  if (n.actorId === n.recipientId) return;
+  const { error } = await client.from("notifications").insert({
+    recipient_id: n.recipientId,
+    actor_id: n.actorId,
+    type: n.type,
+    post_id: n.postId || null,
+    comment_id: n.commentId || null
+  });
+  if (error) throw error;
+}
+
+export async function blockUserReal(blockerId: string, blockedId: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("user_blocks").upsert({ blocker_id: blockerId, blocked_id: blockedId });
+  if (error) throw error;
+}
+
+export async function unblockUserReal(blockerId: string, blockedId: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("user_blocks").delete().eq("blocker_id", blockerId).eq("blocked_id", blockedId);
+  if (error) throw error;
+}
+
+export async function muteUserReal(muterId: string, mutedId: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("user_mutes").upsert({ muter_id: muterId, muted_id: mutedId });
+  if (error) throw error;
+}
+
+export async function unmuteUserReal(muterId: string, mutedId: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("user_mutes").delete().eq("muter_id", muterId).eq("muted_id", mutedId);
+  if (error) throw error;
+}
+
+export async function loadBlocksAndMutes(userId: string) {
+  const client = requireSupabase();
+  const [{ data: blocks, error: blocksError }, { data: mutes, error: mutesError }] = await Promise.all([
+    client.from("user_blocks").select("*").eq("blocker_id", userId),
+    client.from("user_mutes").select("*").eq("muter_id", userId)
+  ]);
+  if (blocksError) throw blocksError;
+  if (mutesError) throw mutesError;
+  return {
+    blocks: ((blocks || []) as UserBlockRow[]).map((row) => ({ blockerId: row.blocker_id, blockedId: row.blocked_id, createdAt: row.created_at }) as UserBlock),
+    mutes: ((mutes || []) as UserMuteRow[]).map((row) => ({ muterId: row.muter_id, mutedId: row.muted_id, createdAt: row.created_at }) as UserMute)
+  };
+}
+
+export async function createReportReal(reporterId: string, postId: string | undefined, reportedUserId: string | undefined, category: string, note?: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("reports").insert({ reporter_id: reporterId, post_id: postId || null, reported_user_id: reportedUserId || null, category, note: note || null });
+  if (error) throw error;
+}
+
+export async function fetchOGPreview(url: string): Promise<OGPreview> {
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+  const response = await fetch(proxyUrl);
+  if (!response.ok) throw new Error("Could not fetch URL preview.");
+  const { contents } = await response.json();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(contents, "text/html");
+  const getMeta = (property: string) =>
+    doc.querySelector(`meta[property="${property}"]`)?.getAttribute("content") ||
+    doc.querySelector(`meta[name="${property}"]`)?.getAttribute("content") || "";
+  const title = getMeta("og:title") || getMeta("twitter:title") || doc.title || url;
+  const description = getMeta("og:description") || getMeta("twitter:description") || "";
+  const image = getMeta("og:image") || getMeta("twitter:image") || "";
+  let platform: OGPreview["platform"] = "generic";
+  let embedUrl: string | undefined;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace("www.", "");
+    if (host.includes("youtube.com") || host.includes("youtu.be")) {
+      platform = "youtube";
+      const videoId = parsed.searchParams.get("v") || (host.includes("youtu.be") ? parsed.pathname.slice(1) : "");
+      if (videoId) embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=0`;
+    } else if (host.includes("instagram.com")) platform = "instagram";
+    else if (host.includes("twitter.com") || host.includes("x.com")) platform = "twitter";
+    else if (host.includes("tiktok.com")) platform = "tiktok";
+    else if (host.includes("spotify.com")) platform = "spotify";
+    else if (host.includes("github.com")) platform = "github";
+  } catch {
+    platform = "generic";
+  }
+  return { url, title, description, image, platform, embedUrl };
 }
 
 export async function toggleFollowReal(followerId: string, followingId: string) {

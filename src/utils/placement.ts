@@ -1,8 +1,8 @@
 import { Post } from "../types";
 import { nextCanvasPosition } from "./canvasLayout";
 
-export function placeNextPost(posts: Post[]) {
-  return nextCanvasPosition(posts);
+export function placeNextPost(posts: Post[], hashtags?: string[]) {
+  return nextCanvasPosition(posts, hashtags);
 }
 
 export function rearrangePosts(posts: Post[], mode: "ranked" | "media") {

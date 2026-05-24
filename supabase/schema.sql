@@ -402,3 +402,123 @@ begin
   alter publication supabase_realtime add table public.follows;
 exception when duplicate_object then null;
 end $$;
+
+-- Dopamine update: link posts, richer comments, notifications, safety tools.
+alter table public.posts add column if not exists source_url text;
+alter table public.posts add column if not exists source_platform text;
+alter table public.posts add column if not exists source_title text;
+alter table public.posts add column if not exists source_thumb text;
+alter table public.posts add column if not exists muted boolean not null default false;
+
+alter table public.posts drop constraint if exists posts_type_check;
+alter table public.posts add constraint posts_type_check
+  check (type in ('text', 'photo', 'video', 'link'));
+
+alter table public.comments add column if not exists gif_url text;
+alter table public.comments add column if not exists parent_id uuid references public.comments(id) on delete cascade;
+alter table public.comments add column if not exists likes_count integer not null default 0;
+
+create table if not exists public.comment_reactions (
+  comment_id uuid not null references public.comments(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null default 'like' check (type = 'like'),
+  created_at timestamptz not null default now(),
+  primary key (comment_id, user_id, type)
+);
+
+alter table public.comment_reactions enable row level security;
+drop policy if exists "comment reactions readable" on public.comment_reactions;
+create policy "comment reactions readable" on public.comment_reactions for select using (true);
+drop policy if exists "users react to comments" on public.comment_reactions;
+create policy "users react to comments" on public.comment_reactions for insert with check (auth.uid() = user_id);
+drop policy if exists "users unreact comments" on public.comment_reactions;
+create policy "users unreact comments" on public.comment_reactions for delete using (auth.uid() = user_id);
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  actor_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null check (type in ('like','comment','follow','repost','mention','reply')),
+  post_id uuid references public.posts(id) on delete cascade,
+  comment_id uuid references public.comments(id) on delete cascade,
+  read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists notifications_recipient_idx on public.notifications(recipient_id, created_at desc);
+
+alter table public.notifications enable row level security;
+drop policy if exists "users read own notifications" on public.notifications;
+create policy "users read own notifications" on public.notifications for select using (auth.uid() = recipient_id);
+drop policy if exists "notifications insertable by authenticated" on public.notifications;
+create policy "notifications insertable by authenticated" on public.notifications for insert with check (auth.uid() = actor_id);
+drop policy if exists "users mark own read" on public.notifications;
+create policy "users mark own read" on public.notifications for update using (auth.uid() = recipient_id);
+drop policy if exists "users delete own notifications" on public.notifications;
+create policy "users delete own notifications" on public.notifications for delete using (auth.uid() = recipient_id);
+
+create table if not exists public.user_blocks (
+  blocker_id uuid not null references public.profiles(id) on delete cascade,
+  blocked_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, blocked_id),
+  check (blocker_id <> blocked_id)
+);
+
+alter table public.user_blocks enable row level security;
+drop policy if exists "users manage own blocks" on public.user_blocks;
+create policy "users manage own blocks" on public.user_blocks for all using (auth.uid() = blocker_id);
+
+create table if not exists public.user_mutes (
+  muter_id uuid not null references public.profiles(id) on delete cascade,
+  muted_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (muter_id, muted_id),
+  check (muter_id <> muted_id)
+);
+
+alter table public.user_mutes enable row level security;
+drop policy if exists "users manage own mutes" on public.user_mutes;
+create policy "users manage own mutes" on public.user_mutes for all using (auth.uid() = muter_id);
+
+create table if not exists public.reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid not null references public.profiles(id) on delete cascade,
+  post_id uuid references public.posts(id) on delete cascade,
+  reported_user_id uuid references public.profiles(id) on delete cascade,
+  category text not null check (category in ('spam','harassment','misinformation','explicit','other')),
+  note text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.reports enable row level security;
+drop policy if exists "users create own reports" on public.reports;
+create policy "users create own reports" on public.reports for insert with check (auth.uid() = reporter_id);
+
+drop policy if exists "authors delete own posts" on public.posts;
+create policy "authors delete own posts" on public.posts for delete using (auth.uid() = author_id);
+drop policy if exists "users delete own comments" on public.comments;
+create policy "users delete own comments" on public.comments for delete using (auth.uid() = author_id);
+
+create or replace function public.adjust_comment_likes(target_comment_id uuid, amount integer)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.comments set likes_count = greatest(0, likes_count + amount) where id = target_comment_id;
+end; $$;
+revoke execute on function public.adjust_comment_likes(uuid, integer) from anon;
+grant execute on function public.adjust_comment_likes(uuid, integer) to authenticated;
+
+create or replace function public.decrement_post_comments(target_post_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.posts set comments_count = greatest(0, comments_count - 1) where id = target_post_id;
+end; $$;
+revoke execute on function public.decrement_post_comments(uuid) from anon;
+grant execute on function public.decrement_post_comments(uuid) to authenticated;
+
+do $$ begin
+  alter publication supabase_realtime add table public.comment_reactions;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.notifications;
+exception when duplicate_object then null; end $$;

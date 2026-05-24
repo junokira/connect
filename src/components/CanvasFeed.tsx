@@ -1,6 +1,6 @@
-import { LocateFixed } from "lucide-react";
+import { LocateFixed, Map } from "lucide-react";
 import { PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CanvasView, FeedStyle, Post, PostReaction, SortMode, User } from "../types";
+import { CanvasView, FeedStyle, Post, PostReaction, SortMode, User, UserBlock, UserMute } from "../types";
 import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y, CANVAS_CARD_HEIGHT, CANVAS_CARD_WIDTH, resolveCanvasCollisions } from "../utils/canvasLayout";
 import { PostCard } from "./PostCard";
 
@@ -18,6 +18,14 @@ type Props = {
   onLikePost: (id: string) => void;
   onRepostPost: (id: string) => void;
   onBookmarkPost: (id: string) => void;
+  blocks?: UserBlock[];
+  mutes?: UserMute[];
+  onEditPost?: (id: string) => void;
+  onDeletePost?: (id: string) => void;
+  onMuteUser?: (userId: string) => void;
+  onReportPost?: (id: string) => void;
+  onHashtagClick?: (tag: string) => void;
+  onPinPost?: (id: string) => void;
   className?: string;
   recenterSignal?: number;
 };
@@ -73,7 +81,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: topic + column * 214 - 428, y: (day % 9) * 28 + row * 268 - 190 };
 };
 
-export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, className = "h-screen", recenterSignal = 0 }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0 }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
   const didDragRef = useRef(false);
@@ -83,6 +91,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   const frameRef = useRef<number | null>(null);
   const queuedViewRef = useRef<CanvasView | null>(null);
   const [size, setSize] = useState({ width: 1400, height: 900 });
+  const [minimapOpen, setMinimapOpen] = useState(true);
   const touchRef = useRef<{ distance: number; zoom: number } | null>(null);
 
   const scheduleView = useCallback((nextView: CanvasView) => {
@@ -145,9 +154,11 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     return () => node.removeEventListener("wheel", handleWheel);
   }, [scheduleView, updateSize]);
 
+  const visibleSourcePosts = useMemo(() => posts.filter((post) => !blocks.some((block) => block.blockedId === post.authorId) && !mutes.some((mute) => mute.mutedId === post.authorId)), [blocks, mutes, posts]);
+
   const positionedPosts = useMemo(
-    () => resolveCanvasCollisions(posts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) }))),
-    [feedStyle, posts]
+    () => resolveCanvasCollisions(visibleSourcePosts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) }))),
+    [feedStyle, visibleSourcePosts]
   );
 
   const centerLatest = useCallback(() => {
@@ -168,6 +179,16 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   }, [positionedPosts, size.height, size.width, view]);
 
   const cardMode = view.zoom < 0.62 ? "compact" : view.zoom > 1.28 ? "expanded" : "standard";
+  const minimap = useMemo(() => {
+    if (!positionedPosts.length) return undefined;
+    const xs = positionedPosts.map((item) => item.position.x);
+    const ys = positionedPosts.map((item) => item.position.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs) + CANVAS_CARD_WIDTH;
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys) + CANVAS_CARD_HEIGHT;
+    return { minX, maxX, minY, maxY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
+  }, [positionedPosts]);
 
   useEffect(() => {
     if (!positionedPosts.length || visiblePosts.length) return;
@@ -259,14 +280,14 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
         <LocateFixed size={17} />
         <span className="hidden sm:inline">Latest</span>
       </button>
-      {posts.length && !visiblePosts.length ? (
+      {visibleSourcePosts.length && !visiblePosts.length ? (
         <div className="absolute left-1/2 top-24 z-20 w-[min(90vw,360px)] -translate-x-1/2 rounded-3xl border border-amber-200 bg-white/92 p-4 text-center text-sm shadow-glass backdrop-blur-xl dark:border-amber-300/20 dark:bg-[#111113]/92">
           <p className="font-bold">Posts are loaded, but the canvas is off target.</p>
-          <p className="mt-1 text-slate-500 dark:text-slate-400">{posts.length} posts are available. Use Latest to recenter.</p>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">{visibleSourcePosts.length} posts are available. Use Latest to recenter.</p>
           <button onClick={centerLatest} className="mt-3 rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">Show posts</button>
         </div>
       ) : null}
-      {!posts.length ? (
+      {!visibleSourcePosts.length ? (
         <div className="absolute left-1/2 top-24 z-20 w-[min(90vw,360px)] -translate-x-1/2 rounded-3xl border border-[#d2d2d7] bg-white/92 p-4 text-center text-sm shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-[#111113]/92">
           <p className="font-bold">No canvas posts yet.</p>
           <p className="mt-1 text-slate-500 dark:text-slate-400">Create a post and it will appear near the center of the map.</p>
@@ -287,6 +308,8 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
                 author={author}
                 emphasized={emphasized}
                 density={cardMode}
+                currentUserId={currentUserId}
+                muted={mutes.some((mute) => mute.mutedId === author.id)}
                 liked={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "like")}
                 reposted={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "repost")}
                 bookmarked={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "bookmark")}
@@ -296,11 +319,41 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
                 onComment={() => onOpenPost(post.id)}
                 onRepost={() => onRepostPost(post.id)}
                 onBookmark={() => onBookmarkPost(post.id)}
+                onEdit={() => onEditPost?.(post.id)}
+                onDelete={() => onDeletePost?.(post.id)}
+                onMute={() => onMuteUser?.(author.id)}
+                onReport={() => onReportPost?.(post.id)}
+                onHashtagClick={onHashtagClick}
+                onPinPost={() => onPinPost?.(post.id)}
               />
             </div>
           );
         })}
       </div>
+      {minimap && minimapOpen ? (
+        <div className="fixed bottom-24 left-4 z-20 h-[100px] w-[160px] overflow-hidden rounded-xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 lg:bottom-5">
+          <button onClick={(event) => { event.stopPropagation(); setMinimapOpen(false); }} className="absolute right-1 top-1 z-10 grid h-5 w-5 place-items-center rounded bg-white/80 text-xs dark:bg-slate-900">×</button>
+          <button
+            className="relative h-full w-full"
+            onClick={(event) => {
+              event.stopPropagation();
+              const rect = event.currentTarget.getBoundingClientRect();
+              const x = minimap.minX + ((event.clientX - rect.left) / rect.width) * minimap.width;
+              const y = minimap.minY + ((event.clientY - rect.top) / rect.height) * minimap.height;
+              onViewChange({ ...view, x: -(x + CANVAS_CARD_CENTER_X), y: -(y + CANVAS_CARD_CENTER_Y) });
+            }}
+            aria-label="Canvas minimap"
+          >
+            {positionedPosts.map(({ post, position }) => {
+              const heat = post.likesCount + post.commentsCount * 2 + post.repostsCount * 3;
+              const color = heat >= 500 ? "bg-rose-500" : heat >= 50 ? "bg-orange-400" : heat >= 10 ? "bg-amber-400" : "bg-slate-400";
+              return <span key={post.id} className={`absolute h-1.5 w-1.5 rounded-full ${color}`} style={{ left: `${((position.x - minimap.minX) / minimap.width) * 100}%`, top: `${((position.y - minimap.minY) / minimap.height) * 100}%` }} />;
+            })}
+            <span className="minimap-viewport" style={{ left: `${((-view.x / view.zoom - minimap.minX) / minimap.width) * 100}%`, top: `${((-view.y / view.zoom - minimap.minY) / minimap.height) * 100}%`, width: `${Math.min(100, (size.width / view.zoom / minimap.width) * 100)}%`, height: `${Math.min(100, (size.height / view.zoom / minimap.height) * 100)}%` }} />
+          </button>
+        </div>
+      ) : null}
+      {!minimapOpen ? <button onClick={() => setMinimapOpen(true)} className="fixed bottom-24 left-4 z-20 grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 lg:bottom-5" aria-label="Show minimap"><Map size={17} /></button> : null}
     </main>
   );
 }

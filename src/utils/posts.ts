@@ -9,6 +9,9 @@ export function getFilteredPosts(posts: Post[], users: User[], sortMode: SortMod
           post.type,
           post.content,
           post.caption,
+          post.sourceUrl,
+          post.sourceTitle,
+          post.sourcePlatform,
           author?.displayName,
           author?.username,
           ...post.hashtags.map((tag) => `#${tag}`)

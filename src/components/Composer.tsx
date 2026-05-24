@@ -1,13 +1,14 @@
-import { Image, Send, Upload, Video } from "lucide-react";
-import { FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
-import { PostType, User } from "../types";
+import { Image, Link2, Loader2, Send, Upload, Video } from "lucide-react";
+import { ClipboardEvent, FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
+import { OGPreview, PostType, User } from "../types";
+import { fetchOGPreview } from "../lib/supabaseData";
 import { getVideoEmbedUrl, isDirectVideoUrl, normalizeExternalUrl } from "../utils/media";
 
 type Props = {
   open: boolean;
   currentUser: User;
   onClose: () => void;
-  onPublish: (draft: { type: PostType; content: string; caption: string; imageUrl?: string; videoUrl?: string; thumbnailUrl?: string; mediaFile?: File; thumbnailFile?: File }) => void | Promise<unknown>;
+  onPublish: (draft: { type: PostType; content: string; caption: string; imageUrl?: string; videoUrl?: string; thumbnailUrl?: string; mediaFile?: File; thumbnailFile?: File; sourceUrl?: string; sourcePlatform?: OGPreview["platform"]; sourceTitle?: string; sourceThumb?: string }) => void | Promise<unknown>;
 };
 
 export function Composer({ open, currentUser, onClose, onPublish }: Props) {
@@ -19,6 +20,9 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [mediaFile, setMediaFile] = useState<File | undefined>();
   const [thumbnailFile, setThumbnailFile] = useState<File | undefined>();
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [ogPreview, setOgPreview] = useState<OGPreview | undefined>();
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [mediaPreview, setMediaPreview] = useState("");
   const [thumbnailPreview, setThumbnailPreview] = useState("");
   const [previewFit, setPreviewFit] = useState<"contain" | "cover">("contain");
@@ -26,11 +30,11 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
 
-  const preview = useMemo(() => (type === "text" ? content : caption), [caption, content, type]);
+  const preview = useMemo(() => (type === "text" || type === "link" ? content : caption), [caption, content, type]);
   const normalizedVideoUrl = type === "video" && videoUrl.trim() ? normalizeExternalUrl(videoUrl) : "";
   const videoEmbedUrl = getVideoEmbedUrl(normalizedVideoUrl);
   const hasMedia = type === "photo" ? Boolean(mediaFile || imageUrl.trim()) : type === "video" ? Boolean(mediaFile || videoUrl.trim()) : true;
-  const canPublish = type === "text" ? Boolean(content.trim()) : hasMedia;
+  const canPublish = type === "link" ? Boolean(content.trim() && sourceUrl.trim()) : type === "text" ? Boolean(content.trim()) : hasMedia;
 
   useEffect(() => {
     if (!mediaFile) {
@@ -64,6 +68,13 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   if (!open) return null;
 
   const stop = (event: MouseEvent) => event.stopPropagation();
+  const handlePaste = (event: ClipboardEvent<HTMLFormElement>) => {
+    const file = event.clipboardData?.files?.[0];
+    if (file?.type.startsWith("image/")) {
+      setType("photo");
+      setMediaFile(file);
+    }
+  };
   const aspectClass = previewAspect === "square" ? "aspect-square" : previewAspect === "portrait" ? "aspect-[4/5]" : previewAspect === "wide" ? "aspect-video" : "";
   const fitClass = previewFit === "cover" ? "object-cover" : "object-contain";
 
@@ -78,16 +89,22 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
         content,
         caption,
         imageUrl: type === "photo" ? imageUrl.trim() : undefined,
-        videoUrl: type === "video" && videoUrl.trim() ? normalizeExternalUrl(videoUrl) : undefined,
+        videoUrl: type === "video" && videoUrl.trim() ? normalizeExternalUrl(videoUrl) : type === "link" && ogPreview?.platform === "youtube" ? normalizeExternalUrl(sourceUrl) : undefined,
         thumbnailUrl: type === "video" ? thumbnailUrl.trim() : undefined,
         mediaFile,
-        thumbnailFile
+        thumbnailFile,
+        sourceUrl: type === "link" ? normalizeExternalUrl(sourceUrl) : undefined,
+        sourcePlatform: ogPreview?.platform || (type === "link" ? "generic" : undefined),
+        sourceTitle: ogPreview?.title || sourceUrl,
+        sourceThumb: ogPreview?.image
       });
       setContent("");
       setCaption("");
       setImageUrl("");
       setVideoUrl("");
       setThumbnailUrl("");
+      setSourceUrl("");
+      setOgPreview(undefined);
       setMediaFile(undefined);
       setThumbnailFile(undefined);
       onClose();
@@ -100,7 +117,7 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
 
   return (
     <div onMouseDown={onClose} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <form onMouseDown={stop} onSubmit={publish} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
+      <form onMouseDown={stop} onPaste={handlePaste} onSubmit={publish} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img className="h-11 w-11 rounded-full object-cover" src={currentUser.avatarUrl} alt="" />
@@ -114,8 +131,8 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
           </button>
         </div>
 
-        <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-white/10">
-          {(["text", "photo", "video"] as PostType[]).map((option) => (
+        <div className="mb-4 grid grid-cols-4 gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-white/10">
+          {(["text", "photo", "video", "link"] as PostType[]).map((option) => (
             <button
               key={option}
               type="button"
@@ -124,8 +141,8 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
                 type === option ? "bg-white shadow-sm dark:bg-slate-900" : "text-slate-500"
               }`}
             >
-              {option === "photo" ? <Image size={16} /> : option === "video" ? <Video size={16} /> : null}
-              {option}
+              {option === "photo" ? <Image size={16} /> : option === "video" ? <Video size={16} /> : option === "link" ? <Link2 size={16} /> : null}
+              {option === "link" ? "Import" : option}
             </button>
           ))}
         </div>
@@ -137,6 +154,26 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
             className="min-h-36 w-full resize-none rounded-2xl border border-slate-200 bg-transparent p-4 outline-none focus:border-teal-500 dark:border-white/10"
             placeholder="What should this canvas remember?"
           />
+        ) : type === "link" ? (
+          <div className="space-y-3">
+            <textarea value={content} onChange={(event) => setContent(event.target.value)} className="min-h-28 w-full resize-none rounded-2xl border border-slate-200 bg-transparent p-4 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Your take on this..." />
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-teal-500 dark:border-white/10" placeholder="Paste any link — YouTube, GitHub, Spotify..." />
+              <button type="button" disabled={!sourceUrl.trim() || previewLoading} onClick={async () => {
+                try {
+                  setPreviewLoading(true);
+                  setError("");
+                  setOgPreview(await fetchOGPreview(normalizeExternalUrl(sourceUrl)));
+                } catch {
+                  setError("Couldn't load a preview — you can still post the link.");
+                  setOgPreview({ url: normalizeExternalUrl(sourceUrl), title: sourceUrl, description: "", image: "", platform: "generic" });
+                } finally {
+                  setPreviewLoading(false);
+                }
+              }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold dark:border-white/10">{previewLoading ? <Loader2 className="animate-spin" size={16} /> : "Preview"}</button>
+            </div>
+            {ogPreview ? <div className="overflow-hidden rounded-2xl bg-slate-100 dark:bg-white/10">{ogPreview.embedUrl ? <iframe className="aspect-video w-full bg-black" src={ogPreview.embedUrl} title="Link preview" allowFullScreen /> : ogPreview.image ? <img className="max-h-64 w-full object-cover" src={ogPreview.image} alt="" /> : null}<div className="p-4"><p className="text-xs font-bold uppercase text-slate-500">{ogPreview.platform}</p><p className="font-bold">{ogPreview.title}</p><p className="line-clamp-2 text-sm text-slate-500">{ogPreview.description}</p></div></div> : null}
+          </div>
         ) : (
           <div className="space-y-3">
             <textarea

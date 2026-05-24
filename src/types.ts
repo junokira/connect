@@ -1,4 +1,4 @@
-export type PostType = "text" | "photo" | "video";
+export type PostType = "text" | "photo" | "video" | "link";
 export type SortMode =
   | "newest"
   | "oldest"
@@ -73,6 +73,11 @@ export type Post = {
   imageUrl?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
+  sourceUrl?: string;
+  sourcePlatform?: "youtube" | "instagram" | "twitter" | "tiktok" | "spotify" | "github" | "generic";
+  sourceTitle?: string;
+  sourceThumb?: string;
+  muted?: boolean;
   x: number;
   y: number;
   createdAt: string;
@@ -90,7 +95,49 @@ export type Comment = {
   postId: string;
   authorId: string;
   content: string;
+  gifUrl?: string;
+  parentId?: string;
+  likesCount: number;
   createdAt: string;
+};
+
+export type CommentReaction = {
+  commentId: string;
+  userId: string;
+  type: "like";
+  createdAt: string;
+};
+
+export type Notification = {
+  id: string;
+  recipientId: string;
+  actorId: string;
+  type: "like" | "comment" | "follow" | "repost" | "mention" | "reply";
+  postId?: string;
+  commentId?: string;
+  read: boolean;
+  createdAt: string;
+};
+
+export type UserBlock = {
+  blockerId: string;
+  blockedId: string;
+  createdAt: string;
+};
+
+export type UserMute = {
+  muterId: string;
+  mutedId: string;
+  createdAt: string;
+};
+
+export type OGPreview = {
+  url: string;
+  title: string;
+  description: string;
+  image: string;
+  platform: Post["sourcePlatform"];
+  embedUrl?: string;
 };
 
 export type CanvasView = {

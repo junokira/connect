@@ -1,6 +1,6 @@
-import { Bookmark, CalendarDays, Heart, ImagePlus, Link as LinkIcon, Loader2, MapPin, Menu, Pencil, Repeat2, Settings, Upload, X } from "lucide-react";
+import { Bookmark, CalendarDays, Heart, ImagePlus, Link as LinkIcon, Loader2, MapPin, Maximize2, Menu, Minimize2, Pencil, Repeat2, Settings, Shield, Upload, X } from "lucide-react";
 import { FormEvent, MouseEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
-import { CanvasView, Follow, Post, PostReaction, ProfileUpdate, User } from "../types";
+import { CanvasView, Follow, Post, PostReaction, ProfileUpdate, User, UserBlock, UserMute } from "../types";
 import { normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
 import { CanvasFeed } from "./CanvasFeed";
@@ -14,6 +14,8 @@ type Props = {
   posts: Post[];
   reactions: PostReaction[];
   follows: Follow[];
+  blocks?: UserBlock[];
+  mutes?: UserMute[];
   onClose: () => void;
   onOpenProfile: (id: string) => void;
   onOpenPost: (id: string) => void;
@@ -24,10 +26,15 @@ type Props = {
   onUpdateProfile: (profile: ProfileUpdate) => Promise<void>;
   onUpdatePassword: (password: string) => Promise<void>;
   onRequestVerification: () => Promise<void>;
+  onBlockUser?: (id: string) => void;
+  onUnblockUser?: (id: string) => void;
+  onMuteUser?: (id: string) => void;
+  onUnmuteUser?: (id: string) => void;
+  onReportUser?: (id: string) => void;
 };
 
 type ProfileTab = "Canvas" | "Posts" | "Media" | "Likes" | "Saved" | "Reposts";
-const tabs: ProfileTab[] = ["Canvas", "Posts", "Media"];
+const tabs: ProfileTab[] = ["Canvas", "Posts", "Media", "Likes", "Saved"];
 
 function EditProfileDialog({ user, onClose, onSave, onUpdatePassword, onRequestVerification }: { user: User; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void>; onRequestVerification: () => Promise<void> }) {
   const [form, setForm] = useState<ProfileUpdate>({
@@ -234,12 +241,13 @@ function FullscreenMedia({ src, label, shape, onClose }: { src: string; label: s
   );
 }
 
-export function ProfileView({ user, currentUserId, users, posts, reactions, follows, onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onRequestVerification }: Props) {
+export function ProfileView({ user, currentUserId, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onRequestVerification, onBlockUser, onUnblockUser, onMuteUser, onUnmuteUser, onReportUser }: Props) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("Canvas");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
   const [networkList, setNetworkList] = useState<"followers" | "following" | undefined>();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [canvasFullscreen, setCanvasFullscreen] = useState(false);
   const [profileCanvasView, setProfileCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.95 });
   const touchStartRef = useRef<{ x: number; y: number; canClose: boolean } | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -276,6 +284,8 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
   if (!user) return null;
   const isOwnProfile = user.id === currentUserId;
   const isFollowing = follows.some((follow) => follow.followerId === currentUserId && follow.followingId === user.id);
+  const isBlocked = blocks.some((block) => block.blockedId === user.id);
+  const isMuted = mutes.some((mute) => mute.mutedId === user.id);
   const reactionState = (postId: string) => ({
     liked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "like"),
     reposted: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "repost"),
@@ -346,11 +356,27 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
             <button onClick={() => setViewer({ src: user.avatarUrl, label: `${user.displayName} avatar`, shape: "avatar" })} className="relative z-30 rounded-full">
               <img className="h-28 w-28 rounded-full border-4 border-[#f5f5f7] bg-white object-cover shadow-xl dark:border-[#050505] dark:bg-slate-950" src={user.avatarUrl} alt="" />
             </button>
-            {isOwnProfile ? (
-              <button onClick={() => setEditing(true)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Edit profile</button>
-            ) : (
-              <button onClick={() => onFollowUser(user.id)} className={`rounded-full px-5 py-2 text-sm font-bold ${isFollowing ? "border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" : "bg-slate-950 text-white dark:bg-white dark:text-slate-950"}`}>{isFollowing ? "Following" : "Follow"}</button>
-            )}
+            <div className="flex items-center gap-2">
+              {isOwnProfile ? (
+                <button onClick={() => setEditing(true)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Edit profile</button>
+              ) : isBlocked ? (
+                <button onClick={() => onUnblockUser?.(user.id)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Unblock</button>
+              ) : (
+                <button onClick={() => onFollowUser(user.id)} className={`rounded-full px-5 py-2 text-sm font-bold ${isFollowing ? "border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" : "bg-slate-950 text-white dark:bg-white dark:text-slate-950"}`}>{isFollowing ? "Following" : "Follow"}</button>
+              )}
+              {!isOwnProfile ? (
+                <div className="relative">
+                  <button onClick={() => setMenuOpen((open) => !open)} className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" aria-label="Profile safety menu"><Shield size={17} /></button>
+                  {menuOpen ? (
+                    <div className="absolute right-0 top-12 z-40 w-52 rounded-2xl border border-slate-200 bg-white p-2 text-sm shadow-2xl dark:border-white/10 dark:bg-slate-950">
+                      <button onClick={() => { (isMuted ? onUnmuteUser : onMuteUser)?.(user.id); setMenuOpen(false); }} className="w-full rounded-xl px-3 py-2 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10">{isMuted ? "Unmute" : `Mute @${user.username}`}</button>
+                      <button onClick={() => { (isBlocked ? onUnblockUser : onBlockUser)?.(user.id); setMenuOpen(false); }} className="w-full rounded-xl px-3 py-2 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10">{isBlocked ? "Unblock" : `Block @${user.username}`}</button>
+                      <button onClick={() => { onReportUser?.(user.id); setMenuOpen(false); }} className="w-full rounded-xl px-3 py-2 text-left font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-400/10">Report user</button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           </div>
           <div className="mt-4">
             <h1 className="flex items-center gap-2 text-2xl font-black">
@@ -373,7 +399,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
           </div>
         </section>
 
-        <div className="grid grid-cols-3 border-y border-slate-200 text-center text-sm font-semibold dark:border-white/10">
+        <div className="grid grid-cols-5 border-y border-slate-200 text-center text-sm font-semibold dark:border-white/10">
           {tabs.map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-4 hover:bg-slate-100 dark:hover:bg-white/10 ${activeTab === tab ? "border-b-2 border-slate-950 dark:border-white" : "text-slate-500"}`}>{tab}</button>
           ))}
@@ -399,8 +425,12 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
 
         <section className="px-4 py-6">
           {activeTab === "Canvas" ? (
-            <div className="overflow-hidden rounded-3xl border border-slate-200 shadow-glass dark:border-white/10">
-              <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="classic" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={onOpenPost} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} className="h-[76vh] min-h-[560px]" />
+            <div className={canvasFullscreen ? "fixed inset-0 z-[55] overflow-hidden bg-[#f5f5f7] dark:bg-[#050505]" : "relative h-[70vh] min-h-[480px] overflow-hidden rounded-3xl border border-slate-200 shadow-glass dark:border-white/10"}>
+              <button onClick={() => setCanvasFullscreen((value) => !value)} className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88" aria-label="Toggle profile canvas fullscreen">
+                {canvasFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              </button>
+              {canvasFullscreen ? <button onClick={() => setCanvasFullscreen(false)} className="absolute left-3 top-3 z-30 rounded-xl border border-slate-200 bg-white/88 px-3 py-2 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88">Back to profile</button> : null}
+              <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="classic" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={onOpenPost} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" />
             </div>
           ) : activeTab === "Media" ? (
             <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-3">

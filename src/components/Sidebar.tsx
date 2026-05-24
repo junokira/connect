@@ -13,6 +13,7 @@ const nav = [
 type Props = {
   currentUser: User;
   activeView: "canvas" | "explore" | "search" | "activity";
+  unreadCount: number;
   onHome: () => void;
   onExplore: () => void;
   onActivity: () => void;
@@ -21,7 +22,7 @@ type Props = {
   onSignOut: () => void;
 };
 
-export function Sidebar({ currentUser, activeView, onHome, onExplore, onActivity, onCreate, onProfile, onSignOut }: Props) {
+export function Sidebar({ currentUser, activeView, unreadCount, onHome, onExplore, onActivity, onCreate, onProfile, onSignOut }: Props) {
   return (
     <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/82 p-5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/82 lg:block">
       <div className="mb-8">
@@ -37,8 +38,15 @@ export function Sidebar({ currentUser, activeView, onHome, onExplore, onActivity
               (label === "Home" && activeView === "canvas") || (label === "Explore" && activeView === "explore") || (label === "Activity" && activeView === "activity") ? "bg-slate-100 text-slate-950 dark:bg-white/10 dark:text-white" : "text-slate-700 dark:text-slate-200"
             }`}
           >
-            <Icon size={20} />
-            {label}
+            <span className="relative">
+              <Icon size={20} />
+              {label === "Activity" && unreadCount > 0 ? (
+                <span className="badge-pulse absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              ) : null}
+            </span>
+            <span>{label}</span>
           </button>
         ))}
       </nav>

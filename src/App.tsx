@@ -1,6 +1,7 @@
-import { Apple, Bell, Eye, EyeOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, X } from "lucide-react";
+import { Apple, Eye, EyeOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasFeed } from "./components/CanvasFeed";
+import { ActivityView as NotificationsActivityView } from "./components/ActivityView";
 import { Composer } from "./components/Composer";
 import { MobileNav } from "./components/MobileNav";
 import { PostCard } from "./components/PostCard";
@@ -452,70 +453,18 @@ function ExploreView({
   );
 }
 
-function ActivityView({
-  posts,
-  users,
-  reactions,
-  comments,
-  onOpenPost,
-  onOpenProfile
-}: {
-  posts: ReturnType<typeof getFilteredPosts>;
-  users: ReturnType<typeof useAppStore.getState>["users"];
-  reactions: ReturnType<typeof useAppStore.getState>["reactions"];
-  comments: ReturnType<typeof useAppStore.getState>["comments"];
-  onOpenPost: (id: string) => void;
-  onOpenProfile: (id: string) => void;
-}) {
-  const events = [
-    ...comments.map((comment) => ({ id: `comment-${comment.id}`, type: "comment", postId: comment.postId, userId: comment.authorId, createdAt: comment.createdAt })),
-    ...reactions.map((reaction) => ({ id: `${reaction.type}-${reaction.postId}-${reaction.userId}`, type: reaction.type, postId: reaction.postId, userId: reaction.userId, createdAt: reaction.createdAt }))
-  ]
-    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-    .slice(0, 40);
-
-  return (
-    <main className="thin-scrollbar h-full overflow-y-auto px-4 pb-28 pt-20 lg:px-8">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-6">
-          <h1 className="flex items-center gap-2 text-3xl font-black"><Bell size={26} /> Activity</h1>
-          <p className="text-sm text-slate-500">Recent social movement across your CONNECT graph.</p>
-        </div>
-        <div className="space-y-3">
-          {events.map((event) => {
-            const user = users.find((candidate) => candidate.id === event.userId);
-            const post = posts.find((candidate) => candidate.id === event.postId);
-            if (!user || !post) return null;
-            return (
-              <button key={event.id} onClick={() => onOpenPost(post.id)} className="flex w-full items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-glass dark:border-white/10 dark:bg-[#111113]">
-                <img onClick={(click) => { click.stopPropagation(); onOpenProfile(user.id); }} className="h-12 w-12 rounded-full object-cover" src={user.avatarUrl} alt="" />
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1 text-sm font-bold">
-                    <span className="truncate">{user.displayName}</span>
-                    <VerifiedBadge verified={user.verified} size={14} />
-                    <span className="font-medium text-slate-500">@{user.username}</span>
-                  </span>
-                  <span className="mt-1 block truncate text-sm text-slate-600 dark:text-slate-300">
-                    {event.type === "comment" ? "commented on" : event.type === "like" ? "liked" : event.type === "repost" ? "reposted" : "bookmarked"} {post.type === "text" ? post.content : post.caption}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-          {!events.length ? <p className="rounded-3xl border border-dashed border-slate-300 p-8 text-sm text-slate-500 dark:border-white/15">No activity yet.</p> : null}
-        </div>
-      </div>
-    </main>
-  );
-}
-
 export default function App() {
   const {
     users,
     posts,
     comments,
     reactions,
+    commentReactions,
     follows,
+    notifications,
+    unreadNotificationCount,
+    blocks,
+    mutes,
     currentUserId,
     authed,
     loading,
@@ -534,7 +483,19 @@ export default function App() {
     likePost,
     repostPost,
     bookmarkPost,
-    addComment,
+    updatePost,
+    deletePost,
+    deleteComment,
+    addCommentExtended,
+    likeComment,
+    markNotificationsRead,
+    blockUser,
+    unblockUser,
+    muteUser,
+    unmuteUser,
+    reportPost,
+    reportUser,
+    pinPost,
     followUser,
     updateProfile,
     updatePassword,
@@ -551,12 +512,26 @@ export default function App() {
   const [activeView, setActiveView] = useState<"canvas" | "explore" | "search" | "activity">("canvas");
   const [feedScope, setFeedScope] = useState<FeedScope>("everyone");
   const [canvasRecenterSignal, setCanvasRecenterSignal] = useState(0);
+  const [editingPostId, setEditingPostId] = useState<string | undefined>();
   const refreshTimer = useRef<number | undefined>(undefined);
   const focusedInitialCluster = useRef(false);
 
   useEffect(() => {
     void initialize();
   }, [initialize]);
+
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const postParam = params.get("post");
+      const profileParam = params.get("profile");
+      if (postParam) setActivePost(postParam);
+      if (profileParam) setActiveProfile(profileParam);
+    };
+    syncFromUrl();
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, [setActivePost, setActiveProfile]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -586,6 +561,8 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "post_reactions" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "comment_reactions" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "follows" }, scheduleRefresh)
       .subscribe();
 
@@ -628,6 +605,19 @@ export default function App() {
     setActiveView("canvas");
     setCanvasRecenterSignal((value) => value + 1);
   }, []);
+  const openPost = useCallback((id?: string) => {
+    setActivePost(id);
+    if (id) window.history.pushState({}, "", `?post=${id}`);
+  }, [setActivePost]);
+  const closePost = useCallback(() => {
+    setEditingPostId(undefined);
+    setActivePost(undefined);
+    window.history.pushState({}, "", "/");
+  }, [setActivePost]);
+  const handleHashtagClick = useCallback((tag: string) => {
+    useAppStore.getState().setSearch(`#${tag}`);
+    setActiveView("search");
+  }, []);
 
   useEffect(() => {
     if (!authed || !latest || focusedInitialCluster.current) return;
@@ -651,6 +641,7 @@ export default function App() {
         <Sidebar
           currentUser={currentUser}
           activeView={activeView}
+          unreadCount={unreadNotificationCount}
           onHome={recenterCanvas}
           onExplore={() => setActiveView("explore")}
           onActivity={() => setActiveView("activity")}
@@ -686,25 +677,34 @@ export default function App() {
             feedStyle={feedStyle}
             view={canvasView}
             onViewChange={setCanvasView}
-            onOpenPost={setActivePost}
+            onOpenPost={openPost}
             onOpenProfile={setActiveProfile}
             onLikePost={(id) => void likePost(id)}
             onRepostPost={(id) => void repostPost(id)}
             onBookmarkPost={(id) => void bookmarkPost(id)}
+            blocks={blocks}
+            mutes={mutes}
+            onEditPost={(id) => { setEditingPostId(id); openPost(id); }}
+            onDeletePost={(id) => void deletePost(id)}
+            onMuteUser={(id) => void (mutes.some((mute) => mute.mutedId === id) ? unmuteUser(id) : muteUser(id))}
+            onReportPost={(id) => void reportPost(id, "other")}
+            onHashtagClick={handleHashtagClick}
+            onPinPost={(id) => void pinPost(id)}
             recenterSignal={canvasRecenterSignal}
           />
         ) : activeView === "explore" ? (
-          <ExploreView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
+          <ExploreView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={openPost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         ) : activeView === "activity" ? (
-          <ActivityView posts={posts} users={users} reactions={reactions} comments={comments} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} />
+          <NotificationsActivityView notifications={notifications} users={users} posts={posts} onMarkAllRead={() => void markNotificationsRead()} onOpenPost={openPost} onOpenProfile={setActiveProfile} />
         ) : (
-          <SearchView posts={searchPosts} users={users} reactionState={reactionState} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
+          <SearchView posts={searchPosts} users={users} reactionState={reactionState} onOpenPost={openPost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         )}
       </div>
 
       {!chromeHidden ? (
         <MobileNav
           activeView={activeView}
+          unreadCount={unreadNotificationCount}
           onHome={recenterCanvas}
           onExplore={() => setActiveView("explore")}
           onCreate={() => setComposerOpen(true)}
@@ -736,17 +736,26 @@ export default function App() {
         post={activePost}
         author={activeAuthor}
         currentUser={currentUser}
+        currentUserId={currentUserId}
         users={users}
         comments={comments.filter((comment) => comment.postId === activePostId)}
-        onClose={() => setActivePost(undefined)}
+        commentReactions={commentReactions}
+        editMode={Boolean(editingPostId && activePostId === editingPostId)}
+        onClose={closePost}
         liked={activePost ? reactionState(activePost.id).liked : false}
         reposted={activePost ? reactionState(activePost.id).reposted : false}
         bookmarked={activePost ? reactionState(activePost.id).bookmarked : false}
         onLike={() => activePost && likePost(activePost.id)}
         onRepost={() => activePost && repostPost(activePost.id)}
         onBookmark={() => activePost && bookmarkPost(activePost.id)}
-        onComment={(content) => activePost && addComment(activePost.id, content)}
+        onDeletePost={() => activePost && void deletePost(activePost.id)}
+        onEditPost={() => activePost && setEditingPostId(activePost.id)}
+        onSaveEdit={(content) => activePost && void updatePost(activePost.id, { content, caption: content })}
+        onLikeComment={(id) => void likeComment(id)}
+        onDeleteComment={(id) => activePost && void deleteComment(id, activePost.id)}
+        onAddCommentExtended={(content, options) => activePost && void addCommentExtended(activePost.id, content, options)}
         onOpenProfile={(id) => setActiveProfile(id)}
+        onHashtagClick={handleHashtagClick}
       />
       <ProfileView
         user={activeProfile}
@@ -755,9 +764,11 @@ export default function App() {
         posts={posts}
         reactions={reactions}
         follows={follows}
+        blocks={blocks}
+        mutes={mutes}
         onClose={() => setActiveProfile(undefined)}
         onOpenProfile={setActiveProfile}
-        onOpenPost={setActivePost}
+        onOpenPost={openPost}
         onLikePost={(id) => void likePost(id)}
         onRepostPost={(id) => void repostPost(id)}
         onBookmarkPost={(id) => void bookmarkPost(id)}
@@ -765,6 +776,11 @@ export default function App() {
         onUpdateProfile={updateProfile}
         onUpdatePassword={updatePassword}
         onRequestVerification={requestVerification}
+        onBlockUser={(id) => void blockUser(id)}
+        onUnblockUser={(id) => void unblockUser(id)}
+        onMuteUser={(id) => void muteUser(id)}
+        onUnmuteUser={(id) => void unmuteUser(id)}
+        onReportUser={(id) => void reportUser(id, "other")}
       />
     </div>
   );
