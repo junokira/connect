@@ -12,6 +12,7 @@ type Props = {
   liked?: boolean;
   reposted?: boolean;
   bookmarked?: boolean;
+  density?: "compact" | "standard" | "expanded";
   onOpen: () => void;
   onProfile: () => void;
   onLike: () => void;
@@ -20,10 +21,21 @@ type Props = {
   onBookmark: () => void;
 };
 
-export function PostCard({ post, author, emphasized, liked, reposted, bookmarked, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
+export function PostCard({ post, author, emphasized, liked, reposted, bookmarked, density = "standard", onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
   const text = post.type === "text" ? post.content : post.caption;
   const embedUrl = getVideoEmbedUrl(post.videoUrl);
   const directVideo = isDirectVideoUrl(post.videoUrl);
+  const score = post.likesCount + post.commentsCount * 2 + post.repostsCount * 3 + post.bookmarksCount;
+  const heat = score >= 80 ? "viral" : score >= 32 ? "hot" : score >= 8 ? "warm" : "cold";
+  const width = density === "compact" ? "w-[240px]" : density === "expanded" && post.type !== "text" ? "w-[380px]" : post.type === "text" ? "w-[292px]" : "w-[340px]";
+  const heatClass =
+    heat === "viral"
+      ? "shadow-[0_0_0_1px_rgba(255,255,255,0.25),0_0_54px_rgba(10,132,255,0.36)] ring-2 ring-[#0a84ff]/50"
+      : heat === "hot"
+        ? "shadow-[0_0_36px_rgba(20,184,166,0.28)] ring-1 ring-teal-400/35"
+        : heat === "warm"
+          ? "shadow-[0_0_24px_rgba(250,204,21,0.18)]"
+          : "";
   const action = (handler: () => void) => (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     handler();
@@ -33,7 +45,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
     <article
       data-canvas-post-id={post.id}
       draggable={false}
-      className={`w-[320px] overflow-hidden rounded-2xl border bg-white/92 text-slate-950 shadow-glass backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-2xl dark:border-white/10 dark:bg-[#111113]/90 dark:text-slate-50 ${
+      className={`${width} ${heatClass} overflow-hidden rounded-2xl border bg-white/92 text-slate-950 shadow-glass backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-2xl dark:border-white/10 dark:bg-[#111113]/90 dark:text-slate-50 ${
         emphasized ? "ring-2 ring-[#0a84ff]" : "border-[#d2d2d7]"
       }`}
       onClick={onOpen}
@@ -61,9 +73,9 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
         </span>
       </div>
 
-      {post.type === "photo" && post.imageUrl ? <img className="max-h-72 w-full bg-slate-100 object-contain dark:bg-black" src={post.imageUrl} alt="" loading="lazy" /> : null}
+      {density !== "compact" && post.type === "photo" && post.imageUrl ? <img className={`${density === "expanded" ? "max-h-96" : "max-h-72"} w-full bg-slate-100 object-contain dark:bg-black`} src={post.imageUrl} alt="" loading="lazy" /> : null}
       {post.type === "video" && (post.thumbnailUrl || post.videoUrl) ? (
-        <div className="relative max-h-72 bg-black">
+        <div className={`relative bg-black ${density === "compact" ? "hidden" : "max-h-72"}`}>
           {post.thumbnailUrl ? (
             <img className="max-h-72 w-full object-contain" src={post.thumbnailUrl} alt="" loading="lazy" />
           ) : directVideo ? (
@@ -82,10 +94,10 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
       ) : null}
 
       <div className="space-y-3 p-4">
-        <p className="line-clamp-5 text-sm leading-6 text-slate-700 dark:text-slate-200">{text}</p>
+        <p className={`${density === "compact" ? "line-clamp-1" : density === "expanded" ? "line-clamp-8" : "line-clamp-5"} text-sm leading-6 text-slate-700 dark:text-slate-200`}>{text}</p>
         <div className="flex flex-wrap gap-1">
-          {post.hashtags.map((tag) => (
-                <span key={tag} className="text-xs font-medium text-[#007aff] dark:text-[#64d2ff]">
+          {density !== "compact" && post.hashtags.map((tag) => (
+            <span key={tag} className="text-xs font-medium text-[#007aff] dark:text-[#64d2ff]">
               #{tag}
             </span>
           ))}

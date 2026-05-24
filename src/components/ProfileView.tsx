@@ -26,7 +26,7 @@ type Props = {
   onRequestVerification: () => Promise<void>;
 };
 
-const tabs = ["Posts", "Replies", "Media", "Likes"] as const;
+const tabs = ["Canvas", "Posts", "Media", "Likes"] as const;
 
 function EditProfileDialog({ user, onClose, onSave, onUpdatePassword, onRequestVerification }: { user: User; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void>; onRequestVerification: () => Promise<void> }) {
   const [form, setForm] = useState<ProfileUpdate>({
@@ -234,11 +234,11 @@ function FullscreenMedia({ src, label, shape, onClose }: { src: string; label: s
 }
 
 export function ProfileView({ user, currentUserId, users, posts, reactions, follows, onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onRequestVerification }: Props) {
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Posts");
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Canvas");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
   const [networkList, setNetworkList] = useState<"followers" | "following" | undefined>();
-  const [profileCanvasView, setProfileCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.92 });
+  const [profileCanvasView, setProfileCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.95 });
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
@@ -252,7 +252,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0, behavior: "auto" });
-    setActiveTab("Posts");
+    setActiveTab("Canvas");
   }, [user?.id]);
 
   const profileData = useMemo(() => {
@@ -368,72 +368,31 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
           </section>
         ) : null}
 
-        <section className="grid gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div>
-            <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">{activeTab === "Media" ? "Media" : activeTab === "Likes" ? "Liked posts" : "Status feed"}</h2>
-            <div className="mb-6 overflow-hidden rounded-3xl border border-slate-200 shadow-glass dark:border-white/10">
-              <CanvasFeed
-                posts={visiblePosts}
-                users={users}
-                reactions={reactions}
-                currentUserId={currentUserId}
-                sortMode="newest"
-                feedStyle="classic"
-                view={profileCanvasView}
-                onViewChange={setProfileCanvasView}
-                onOpenPost={onOpenPost}
-                onOpenProfile={onOpenProfile}
-                onLikePost={onLikePost}
-                onRepostPost={onRepostPost}
-                onBookmarkPost={onBookmarkPost}
-                className="h-[72vh] min-h-[520px]"
-              />
+        <section className="px-4 py-6">
+          {activeTab === "Canvas" ? (
+            <div className="overflow-hidden rounded-3xl border border-slate-200 shadow-glass dark:border-white/10">
+              <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="classic" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={onOpenPost} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} className="h-[76vh] min-h-[560px]" />
             </div>
-            <div className="mx-auto grid max-w-[700px] justify-items-center gap-4 sm:grid-cols-2">
+          ) : activeTab === "Media" ? (
+            <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-3">
+              {profileData.mediaPosts.map((post) => (
+                <button key={post.id} onClick={() => onOpenPost(post.id)} className="aspect-[4/5] overflow-hidden rounded-2xl bg-slate-100 dark:bg-white/10">
+                  <img className="h-full w-full object-cover" src={post.imageUrl || post.thumbnailUrl} alt="" />
+                </button>
+              ))}
+              {!profileData.mediaPosts.length ? <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500 dark:border-white/15">No media yet.</p> : null}
+            </div>
+          ) : (
+            <div className="mx-auto grid max-w-[760px] justify-items-center gap-4 sm:grid-cols-2">
               {visiblePosts.map((post) => (
                 <div key={post.id} className="space-y-2">
                   {post.authorId !== user.id ? <p className="text-xs font-bold uppercase text-emerald-600 dark:text-emerald-300">Reposted by @{user.username}</p> : null}
-                  <PostCard
-                    post={post}
-                    author={users.find((candidate) => candidate.id === post.authorId) || user}
-                    {...reactionState(post.id)}
-                    onOpen={() => onOpenPost(post.id)}
-                    onProfile={() => onOpenProfile(post.authorId)}
-                    onLike={() => onLikePost(post.id)}
-                    onComment={() => onOpenPost(post.id)}
-                    onRepost={() => onRepostPost(post.id)}
-                    onBookmark={() => onBookmarkPost(post.id)}
-                  />
+                  <PostCard post={post} author={users.find((candidate) => candidate.id === post.authorId) || user} {...reactionState(post.id)} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(post.authorId)} onLike={() => onLikePost(post.id)} onComment={() => onOpenPost(post.id)} onRepost={() => onRepostPost(post.id)} onBookmark={() => onBookmarkPost(post.id)} />
                 </div>
               ))}
               {!visiblePosts.length ? <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500 dark:border-white/15">Nothing here yet.</p> : null}
             </div>
-          </div>
-          <aside>
-            <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Media grid</h2>
-            <div className="grid grid-cols-2 gap-2">
-              {profileData.mediaPosts.map((post) => (
-                <button key={post.id} onClick={() => onOpenPost(post.id)} className="aspect-square overflow-hidden rounded-xl bg-slate-100 dark:bg-white/10">
-                  <img className="h-full w-full object-cover" src={post.imageUrl || post.thumbnailUrl} alt="" />
-                </button>
-              ))}
-            </div>
-            <h2 className="mb-3 mt-6 text-sm font-bold uppercase text-slate-400">People</h2>
-            <div className="space-y-3">
-              {users.filter((candidate) => candidate.id !== user.id).slice(0, 4).map((candidate) => (
-                <button key={candidate.id} onClick={() => onOpenProfile(candidate.id)} className="flex w-full items-center gap-3 rounded-2xl bg-slate-100 p-3 text-left transition hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15">
-                  <img className="h-10 w-10 rounded-full object-cover" src={candidate.avatarUrl} alt="" />
-                  <div>
-                    <p className="flex items-center gap-1 text-sm font-semibold">
-                      {candidate.displayName}
-                      <VerifiedBadge verified={candidate.verified} size={14} />
-                    </p>
-                    <p className="text-xs text-slate-500">@{candidate.username}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </aside>
+          )}
         </section>
       </div>
       {editing ? <EditProfileDialog user={user} onClose={() => setEditing(false)} onSave={onUpdateProfile} onUpdatePassword={onUpdatePassword} onRequestVerification={onRequestVerification} /> : null}

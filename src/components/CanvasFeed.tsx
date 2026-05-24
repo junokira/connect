@@ -22,34 +22,54 @@ type Props = {
 };
 
 const clampZoom = (zoom: number) => Math.max(0.35, Math.min(2.2, zoom));
+const hashValue = (value: string) => [...value].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 9973, 17);
+
+const clusterAnchor = (post: Post) => {
+  const tag = post.hashtags[0] || post.authorId || "connect";
+  const hash = hashValue(tag);
+  const angle = (hash % 360) * (Math.PI / 180);
+  const radius = 90 + (hash % 5) * 72;
+  return { x: Math.round(Math.cos(angle) * radius), y: Math.round(Math.sin(angle) * radius) };
+};
+
+const engagementScore = (post: Post) => post.likesCount + post.commentsCount * 2 + post.repostsCount * 3 + post.bookmarksCount;
 
 const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
-  if (style === "classic") return { x: post.x, y: post.y };
+  const anchor = clusterAnchor(post);
+  if (style === "classic") {
+    const ring = Math.floor(index / 8);
+    const slot = index % 8;
+    const angle = slot * 0.785 + ring * 0.28;
+    const radius = ring === 0 ? 90 + slot * 22 : 210 + ring * 135;
+    return { x: anchor.x + Math.round(Math.cos(angle) * radius), y: anchor.y + Math.round(Math.sin(angle) * radius * 0.76) };
+  }
   if (style === "gallery") {
-    const col = index % 5;
-    const row = Math.floor(index / 5);
-    const lift = post.type === "text" ? 80 : 0;
-    return { x: col * 380 - 760, y: row * 350 - 220 + lift };
+    const col = index % 4;
+    const row = Math.floor(index / 4);
+    const stagger = [0, 120, 48, 172][col];
+    const lift = post.type === "text" ? 90 : post.type === "video" ? -20 : 0;
+    return { x: col * 330 - 540, y: row * 360 + stagger - 220 + lift };
   }
   if (style === "mosaic") {
-    const columns = [-760, -380, 0, 380, 760];
+    const columns = [-560, -240, 80, 400];
     const col = index % columns.length;
     const row = Math.floor(index / columns.length);
-    const stagger = [0, 150, 70, 220, 110][col];
-    const mediaLift = post.type === "text" ? 90 : -20;
-    return { x: columns[col], y: row * 430 + stagger + mediaLift - 260 };
+    const stagger = [0, 104, 34, 150][col];
+    const depth = (engagementScore(post) % 3) * 18;
+    return { x: columns[col] + depth, y: row * 340 + stagger - 220 - depth };
   }
   if (style === "orbit") {
-    const ring = Math.floor(index / 8) + 1;
-    const inRing = index % 8;
-    const angle = (inRing / 8) * Math.PI * 2 + ring * 0.34;
-    const radius = 230 + ring * 260;
+    const ring = Math.floor(index / 10) + 1;
+    const inRing = index % 10;
+    const angle = (inRing / 10) * Math.PI * 2 + ring * 0.22;
+    const radius = 230 + ring * 180;
     return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
   }
-  const typeOffset = post.type === "photo" ? -360 : post.type === "video" ? 360 : 0;
-  const column = index % 3;
-  const row = Math.floor(index / 3);
-  return { x: typeOffset + column * 80 - 80, y: row * 330 - 220 };
+  const day = Math.floor(Date.parse(post.createdAt) / 86_400_000);
+  const topic = anchor.x / 2;
+  const column = index % 5;
+  const row = Math.floor(index / 5);
+  return { x: topic + column * 250 - 500, y: (day % 9) * 34 + row * 300 - 220 };
 };
 
 export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, className = "h-screen" }: Props) {
@@ -145,6 +165,8 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     const maxY = (size.height - centerY - view.y + padding) / view.zoom;
     return positionedPosts.filter(({ position }) => position.x + CANVAS_CARD_WIDTH > minX && position.x < maxX && position.y + CANVAS_CARD_HEIGHT > minY && position.y < maxY);
   }, [positionedPosts, size.height, size.width, view]);
+
+  const cardMode = view.zoom < 0.62 ? "compact" : view.zoom > 1.28 ? "expanded" : "standard";
 
   useEffect(() => {
     if (!positionedPosts.length || visiblePosts.length) return;
@@ -255,6 +277,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
                 post={post}
                 author={author}
                 emphasized={emphasized}
+                density={cardMode}
                 liked={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "like")}
                 reposted={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "repost")}
                 bookmarked={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "bookmark")}
