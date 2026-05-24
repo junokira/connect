@@ -1,4 +1,4 @@
-import { CalendarDays, ImagePlus, Link as LinkIcon, Loader2, MapPin, Pencil, Upload, X } from "lucide-react";
+import { Bookmark, CalendarDays, Heart, ImagePlus, Link as LinkIcon, Loader2, MapPin, Menu, Pencil, Repeat2, Settings, Upload, X } from "lucide-react";
 import { FormEvent, MouseEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasView, Follow, Post, PostReaction, ProfileUpdate, User } from "../types";
 import { normalizeExternalUrl } from "../utils/media";
@@ -26,7 +26,8 @@ type Props = {
   onRequestVerification: () => Promise<void>;
 };
 
-const tabs = ["Canvas", "Posts", "Media", "Likes"] as const;
+type ProfileTab = "Canvas" | "Posts" | "Media" | "Likes" | "Saved" | "Reposts";
+const tabs: ProfileTab[] = ["Canvas", "Posts", "Media"];
 
 function EditProfileDialog({ user, onClose, onSave, onUpdatePassword, onRequestVerification }: { user: User; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void>; onRequestVerification: () => Promise<void> }) {
   const [form, setForm] = useState<ProfileUpdate>({
@@ -234,12 +235,13 @@ function FullscreenMedia({ src, label, shape, onClose }: { src: string; label: s
 }
 
 export function ProfileView({ user, currentUserId, users, posts, reactions, follows, onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onRequestVerification }: Props) {
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Canvas");
+  const [activeTab, setActiveTab] = useState<ProfileTab>("Canvas");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
   const [networkList, setNetworkList] = useState<"followers" | "following" | undefined>();
+  const [menuOpen, setMenuOpen] = useState(false);
   const [profileCanvasView, setProfileCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.95 });
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; canClose: boolean } | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -256,14 +258,17 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
   }, [user?.id]);
 
   const profileData = useMemo(() => {
-    if (!user) return { userPosts: [], mediaPosts: [], likedPosts: [], pinned: undefined };
+    if (!user) return { userPosts: [], mediaPosts: [], likedPosts: [], bookmarkedPosts: [], repostedPosts: [], pinned: undefined };
     const repostedIds = new Set(reactions.filter((reaction) => reaction.userId === user.id && reaction.type === "repost").map((reaction) => reaction.postId));
     const likedIds = new Set(reactions.filter((reaction) => reaction.userId === user.id && reaction.type === "like").map((reaction) => reaction.postId));
+    const bookmarkedIds = new Set(reactions.filter((reaction) => reaction.userId === user.id && reaction.type === "bookmark").map((reaction) => reaction.postId));
     const userPosts = posts.filter((post) => post.authorId === user.id || repostedIds.has(post.id));
     return {
       userPosts,
       mediaPosts: userPosts.filter((post) => post.type !== "text"),
       likedPosts: posts.filter((post) => likedIds.has(post.id)),
+      bookmarkedPosts: posts.filter((post) => bookmarkedIds.has(post.id)),
+      repostedPosts: posts.filter((post) => repostedIds.has(post.id)),
       pinned: userPosts.find((post) => post.pinned)
     };
   }, [posts, reactions, user]);
@@ -276,16 +281,22 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
     reposted: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "repost"),
     bookmarked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "bookmark")
   });
-  const visiblePosts = activeTab === "Media" ? profileData.mediaPosts : activeTab === "Likes" ? profileData.likedPosts : profileData.userPosts;
+  const visiblePosts =
+    activeTab === "Media" ? profileData.mediaPosts :
+      activeTab === "Likes" && isOwnProfile ? profileData.likedPosts :
+        activeTab === "Saved" && isOwnProfile ? profileData.bookmarkedPosts :
+          activeTab === "Reposts" ? profileData.repostedPosts :
+            profileData.userPosts;
   const websiteUrl = user.website ? normalizeExternalUrl(user.website) : "";
   const touchStart = (event: TouchEvent) => {
     const touch = event.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    const target = event.target as HTMLElement;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, canClose: !target.closest(".canvas-viewport,button,a,input,textarea,select") && (scrollerRef.current?.scrollTop || 0) <= 8 };
   };
   const touchEnd = (event: TouchEvent) => {
     const start = touchStartRef.current;
     touchStartRef.current = null;
-    if (!start) return;
+    if (!start?.canClose) return;
     const touch = event.changedTouches[0];
     const deltaX = touch.clientX - start.x;
     const deltaY = Math.abs(touch.clientY - start.y);
@@ -302,9 +313,27 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
           </p>
           <p className="text-sm text-slate-500">{profileData.userPosts.length} posts</p>
         </div>
-        <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close profile">
-          <X size={20} />
-        </button>
+        <div className="relative flex items-center gap-1">
+          <button onClick={() => setMenuOpen((open) => !open)} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Profile menu">
+            <Menu size={20} />
+          </button>
+          <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close profile">
+            <X size={20} />
+          </button>
+          {menuOpen ? (
+            <div className="absolute right-0 top-12 z-30 w-64 rounded-3xl border border-slate-200 bg-white/95 p-2 text-sm shadow-2xl backdrop-blur dark:border-white/10 dark:bg-slate-950/95">
+              <button onClick={() => { setActiveTab("Media"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><ImagePlus size={17} /> Media</button>
+              <button onClick={() => { setActiveTab("Reposts"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Repeat2 size={17} /> Reposts</button>
+              {isOwnProfile ? (
+                <>
+                  <button onClick={() => { setActiveTab("Likes"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Heart size={17} /> Liked posts</button>
+                  <button onClick={() => { setActiveTab("Saved"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Bookmark size={17} /> Saved posts</button>
+                  <button onClick={() => { setEditing(true); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Settings size={17} /> Settings and verification</button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </header>
       <div className="mx-auto max-w-5xl pb-24">
         <div className="relative z-0 h-44 overflow-hidden bg-slate-200 sm:h-64 dark:bg-white/10">
@@ -344,7 +373,7 @@ export function ProfileView({ user, currentUserId, users, posts, reactions, foll
           </div>
         </section>
 
-        <div className="grid grid-cols-4 border-y border-slate-200 text-center text-sm font-semibold dark:border-white/10">
+        <div className="grid grid-cols-3 border-y border-slate-200 text-center text-sm font-semibold dark:border-white/10">
           {tabs.map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-4 hover:bg-slate-100 dark:hover:bg-white/10 ${activeTab === tab ? "border-b-2 border-slate-950 dark:border-white" : "text-slate-500"}`}>{tab}</button>
           ))}

@@ -73,13 +73,13 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
         </span>
       </div>
 
-      {density !== "compact" && post.type === "photo" && post.imageUrl ? <img className={`${density === "expanded" ? "max-h-96" : "max-h-72"} w-full bg-slate-100 object-contain dark:bg-black`} src={post.imageUrl} alt="" loading="lazy" /> : null}
+      {post.type === "photo" && post.imageUrl ? <img className={`${density === "compact" ? "h-24 object-cover" : density === "expanded" ? "max-h-96 object-contain" : "max-h-72 object-contain"} w-full bg-slate-100 dark:bg-black`} src={post.imageUrl} alt="" loading="lazy" /> : null}
       {post.type === "video" && (post.thumbnailUrl || post.videoUrl) ? (
-        <div className={`relative bg-black ${density === "compact" ? "hidden" : "max-h-72"}`}>
+        <div className={`relative bg-black ${density === "compact" ? "h-24 overflow-hidden" : "max-h-72"}`}>
           {post.thumbnailUrl ? (
-            <img className="max-h-72 w-full object-contain" src={post.thumbnailUrl} alt="" loading="lazy" />
+            <img className={`${density === "compact" ? "h-full object-cover" : "max-h-72 object-contain"} w-full`} src={post.thumbnailUrl} alt="" loading="lazy" />
           ) : directVideo ? (
-            <video className="max-h-72 w-full object-contain" src={post.videoUrl} muted preload="metadata" />
+            <video className={`${density === "compact" ? "h-full object-cover" : "max-h-72 object-contain"} w-full`} src={post.videoUrl} muted preload="metadata" />
           ) : embedUrl ? (
             <div className="grid h-48 place-items-center bg-black text-sm font-semibold text-white/80">External video</div>
           ) : (

@@ -19,6 +19,7 @@ type Props = {
   onRepostPost: (id: string) => void;
   onBookmarkPost: (id: string) => void;
   className?: string;
+  recenterSignal?: number;
 };
 
 const clampZoom = (zoom: number) => Math.max(0.35, Math.min(2.2, zoom));
@@ -28,7 +29,7 @@ const clusterAnchor = (post: Post) => {
   const tag = post.hashtags[0] || post.authorId || "connect";
   const hash = hashValue(tag);
   const angle = (hash % 360) * (Math.PI / 180);
-  const radius = 90 + (hash % 5) * 72;
+  const radius = 64 + (hash % 4) * 46;
   return { x: Math.round(Math.cos(angle) * radius), y: Math.round(Math.sin(angle) * radius) };
 };
 
@@ -40,39 +41,39 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
     const ring = Math.floor(index / 8);
     const slot = index % 8;
     const angle = slot * 0.785 + ring * 0.28;
-    const radius = ring === 0 ? 90 + slot * 22 : 210 + ring * 135;
+    const radius = ring === 0 ? 56 + slot * 14 : 150 + ring * 92;
     return { x: anchor.x + Math.round(Math.cos(angle) * radius), y: anchor.y + Math.round(Math.sin(angle) * radius * 0.76) };
   }
   if (style === "gallery") {
     const col = index % 4;
     const row = Math.floor(index / 4);
-    const stagger = [0, 120, 48, 172][col];
+    const stagger = [0, 92, 36, 128][col];
     const lift = post.type === "text" ? 90 : post.type === "video" ? -20 : 0;
-    return { x: col * 330 - 540, y: row * 360 + stagger - 220 + lift };
+    return { x: col * 306 - 460, y: row * 316 + stagger - 190 + lift };
   }
   if (style === "mosaic") {
-    const columns = [-560, -240, 80, 400];
+    const columns = [-470, -178, 114, 406];
     const col = index % columns.length;
     const row = Math.floor(index / columns.length);
-    const stagger = [0, 104, 34, 150][col];
-    const depth = (engagementScore(post) % 3) * 18;
-    return { x: columns[col] + depth, y: row * 340 + stagger - 220 - depth };
+    const stagger = [0, 76, 26, 112][col];
+    const depth = (engagementScore(post) % 3) * 12;
+    return { x: columns[col] + depth, y: row * 302 + stagger - 190 - depth };
   }
   if (style === "orbit") {
     const ring = Math.floor(index / 10) + 1;
     const inRing = index % 10;
     const angle = (inRing / 10) * Math.PI * 2 + ring * 0.22;
-    const radius = 230 + ring * 180;
+    const radius = 170 + ring * 132;
     return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
   }
   const day = Math.floor(Date.parse(post.createdAt) / 86_400_000);
   const topic = anchor.x / 2;
   const column = index % 5;
   const row = Math.floor(index / 5);
-  return { x: topic + column * 250 - 500, y: (day % 9) * 34 + row * 300 - 220 };
+  return { x: topic + column * 214 - 428, y: (day % 9) * 28 + row * 268 - 190 };
 };
 
-export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, className = "h-screen" }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, className = "h-screen", recenterSignal = 0 }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
   const didDragRef = useRef(false);
@@ -183,7 +184,13 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     return () => cancelAnimationFrame(frame);
   }, [centerLatest, feedStyle, positionedPosts]);
 
+  useEffect(() => {
+    if (!recenterSignal) return;
+    centerLatest();
+  }, [centerLatest, recenterSignal]);
+
   const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
     if ((event.target as HTMLElement).closest("button,input,select,textarea,a,video")) return;
     const postElement = (event.target as HTMLElement).closest<HTMLElement>("[data-canvas-post-id]");
     updateSize();
@@ -210,6 +217,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   };
 
   const touchMove = (event: TouchEvent<HTMLDivElement>) => {
+    event.stopPropagation();
     if (event.touches.length !== 2) return;
     event.preventDefault();
     const [a, b] = [event.touches[0], event.touches[1]];
@@ -230,6 +238,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
       onPointerUp={pointerUp}
       onPointerCancel={pointerUp}
       onTouchMove={touchMove}
+      onTouchStart={(event) => event.stopPropagation()}
       onTouchEnd={() => (touchRef.current = null)}
       onClickCapture={(event) => {
         if (!didDragRef.current && !suppressClickRef.current) return;

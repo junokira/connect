@@ -550,6 +550,7 @@ export default function App() {
   const [chromeHidden, setChromeHidden] = useState(false);
   const [activeView, setActiveView] = useState<"canvas" | "explore" | "search" | "activity">("canvas");
   const [feedScope, setFeedScope] = useState<FeedScope>("everyone");
+  const [canvasRecenterSignal, setCanvasRecenterSignal] = useState(0);
   const refreshTimer = useRef<number | undefined>(undefined);
   const focusedInitialCluster = useRef(false);
 
@@ -623,6 +624,10 @@ export default function App() {
     if (!post) return;
     setCanvasView({ x: -(post.x + CANVAS_CARD_CENTER_X), y: -(post.y + CANVAS_CARD_CENTER_Y), zoom });
   }, [latest, setCanvasView]);
+  const recenterCanvas = useCallback(() => {
+    setActiveView("canvas");
+    setCanvasRecenterSignal((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     if (!authed || !latest || focusedInitialCluster.current) return;
@@ -646,10 +651,7 @@ export default function App() {
         <Sidebar
           currentUser={currentUser}
           activeView={activeView}
-          onHome={() => {
-            setActiveView("canvas");
-            focusPost(latest, 0.95);
-          }}
+          onHome={recenterCanvas}
           onExplore={() => setActiveView("explore")}
           onActivity={() => setActiveView("activity")}
           onCreate={() => setComposerOpen(true)}
@@ -689,6 +691,7 @@ export default function App() {
             onLikePost={(id) => void likePost(id)}
             onRepostPost={(id) => void repostPost(id)}
             onBookmarkPost={(id) => void bookmarkPost(id)}
+            recenterSignal={canvasRecenterSignal}
           />
         ) : activeView === "explore" ? (
           <ExploreView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={setActivePost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
@@ -702,10 +705,7 @@ export default function App() {
       {!chromeHidden ? (
         <MobileNav
           activeView={activeView}
-          onHome={() => {
-            setActiveView("canvas");
-            focusPost(latest, 0.95);
-          }}
+          onHome={recenterCanvas}
           onExplore={() => setActiveView("explore")}
           onCreate={() => setComposerOpen(true)}
           onActivity={() => setActiveView("activity")}
@@ -720,7 +720,7 @@ export default function App() {
         onZoomIn={() => zoomBy(0.12)}
         onZoomOut={() => zoomBy(-0.12)}
         onReset={() => focusPost(latest, 0.95)}
-        onLatest={() => focusPost(latest, 0.95)}
+        onLatest={recenterCanvas}
         onHide={() => {
           setChromeHidden(true);
           setAdjustOpen(false);

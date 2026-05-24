@@ -25,7 +25,8 @@ type Props = {
 export function PostModal({ post, author, currentUser, comments, users, onClose, liked, reposted, bookmarked, onLike, onRepost, onBookmark, onComment, onOpenProfile }: Props) {
   const [comment, setComment] = useState("");
   const [shareStatus, setShareStatus] = useState("");
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; canClose: boolean } | null>(null);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -63,16 +64,18 @@ export function PostModal({ post, author, currentUser, comments, users, onClose,
   };
   const touchStart = (event: TouchEvent) => {
     const touch = event.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    const target = event.target as HTMLElement;
+    const interactive = target.closest("textarea,input,button,a,video,iframe");
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, canClose: !interactive && (scrollerRef.current?.scrollTop || 0) <= 2 };
   };
   const touchEnd = (event: TouchEvent) => {
     const start = touchStartRef.current;
     touchStartRef.current = null;
-    if (!start) return;
+    if (!start?.canClose) return;
     const touch = event.changedTouches[0];
     const deltaY = touch.clientY - start.y;
     const deltaX = Math.abs(touch.clientX - start.x);
-    if (deltaY > 90 && deltaY > deltaX * 1.4) onClose();
+    if (deltaY > 132 && deltaY > deltaX * 1.6 && (scrollerRef.current?.scrollTop || 0) <= 8) onClose();
   };
 
   return (
@@ -94,7 +97,7 @@ export function PostModal({ post, author, currentUser, comments, users, onClose,
           </button>
         </header>
 
-        <div className="thin-scrollbar overflow-y-auto">
+        <div ref={scrollerRef} className="thin-scrollbar overflow-y-auto">
           {post.type === "photo" && post.imageUrl ? <img className="max-h-[62vh] w-full object-contain bg-slate-100 dark:bg-black" src={post.imageUrl} alt="" /> : null}
           {post.type === "video" && videoUrl && isDirectVideoUrl(videoUrl) ? <video className="max-h-[62vh] w-full bg-black object-contain" src={videoUrl} poster={post.thumbnailUrl} controls /> : null}
           {post.type === "video" && videoUrl && embedUrl ? <iframe className="aspect-video max-h-[62vh] w-full bg-black" src={embedUrl} title="Video post" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /> : null}
