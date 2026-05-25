@@ -71,7 +71,6 @@ function AuthGate() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
   const [bannerUrl, setBannerUrl] = useState("");
   const [status, setStatus] = useState("");
 
@@ -89,7 +88,7 @@ function AuthGate() {
         bio,
         location: "",
         website: "",
-        avatarUrl,
+        avatarUrl: undefined,
         bannerUrl
       });
       if (!signedIn) setStatus("Confirmation email sent. Open it on this device or browser, then CONNECT will finish signing you in.");
@@ -130,7 +129,7 @@ function AuthGate() {
     <main className="h-[100dvh] overflow-y-auto bg-[#f5f5f7] p-4 dark:bg-[#050505]">
       <form onSubmit={submit} className="mx-auto my-4 w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-glass dark:border-white/10 dark:bg-slate-950 sm:my-10">
         <p className="mb-1 text-2xl font-black text-slate-950 dark:text-white">CONNECT</p>
-        <p className="mb-5 text-sm text-slate-500">Enter the spatial feed with real Supabase auth.</p>
+        <p className="mb-5 text-sm text-slate-500">Step into AWAKEN CULT's spatial social world.</p>
         <div className="mb-5 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 dark:bg-white/10">
           <button type="button" onClick={() => setMode("signin")} className={`rounded-xl px-3 py-2 text-sm font-bold ${mode === "signin" ? "bg-white shadow-sm dark:bg-slate-900" : "text-slate-500"}`}>Sign in</button>
           <button type="button" onClick={() => setMode("signup")} className={`rounded-xl px-3 py-2 text-sm font-bold ${mode === "signup" ? "bg-white shadow-sm dark:bg-slate-900" : "text-slate-500"}`}>Sign up</button>
@@ -149,16 +148,8 @@ function AuthGate() {
             </div>
             <label className="mb-2 block text-sm font-semibold">Bio</label>
             <textarea value={bio} onChange={(event) => setBio(event.target.value)} className="mb-4 min-h-20 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="A little about you" />
-            <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Avatar URL</span>
-                <input value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Optional" />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold">Banner URL</span>
-                <input value={bannerUrl} onChange={(event) => setBannerUrl(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Optional" />
-              </label>
-            </div>
+            <label className="mb-2 block text-sm font-semibold">Banner URL</label>
+            <input value={bannerUrl} onChange={(event) => setBannerUrl(event.target.value)} className="mb-4 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Optional" />
           </>
         ) : null}
         <label className="mb-2 block text-sm font-semibold">Email</label>

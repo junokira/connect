@@ -1,10 +1,20 @@
 create extension if not exists pgcrypto;
 
+-- Basic neutral avatar used when a profile has not uploaded a real image yet.
+-- Keep this in sync with DEFAULT_AVATAR_URL in src/lib/supabaseData.ts.
+create or replace function public.default_connect_avatar_url()
+returns text
+language sql
+immutable
+as $$
+  select 'data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' viewBox=''0 0 240 240''%3E%3Crect width=''240'' height=''240'' rx=''120'' fill=''%23e5e7eb''/%3E%3Ccircle cx=''120'' cy=''92'' r=''42'' fill=''%239ca3af''/%3E%3Cpath d=''M48 211c10-45 42-70 72-70s62 25 72 70'' fill=''%239ca3af''/%3E%3C/svg%3E';
+$$;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text not null,
   username text not null unique,
-  avatar_url text not null default 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80',
+  avatar_url text not null default public.default_connect_avatar_url(),
   banner_url text not null default 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80',
   bio text not null default 'New to CONNECT.',
   location text not null default '',
@@ -29,6 +39,7 @@ alter table public.profiles add column if not exists featured_banner_url text no
 alter table public.profiles add column if not exists featured_cover_url text not null default '';
 alter table public.profiles add column if not exists is_admin boolean not null default false;
 alter table public.profiles add column if not exists banned boolean not null default false;
+alter table public.profiles alter column avatar_url set default public.default_connect_avatar_url();
 
 do $$
 begin
@@ -125,6 +136,7 @@ begin
   cleaned := regexp_replace(cleaned, '[^a-zA-Z0-9_]', '_', 'g');
   cleaned := regexp_replace(cleaned, '_+', '_', 'g');
   cleaned := regexp_replace(cleaned, '^_+|_+$', '', 'g');
+  cleaned := regexp_replace(cleaned, '_[0-9a-fA-F]{5,8}$', '');
   cleaned := left(cleaned, 24);
   if cleaned = '' then
     cleaned := 'connectuser';
@@ -180,7 +192,7 @@ begin
     new.id,
     coalesce(new.raw_user_meta_data->>'display_name', base_username),
     requested_username,
-    coalesce(nullif(new.raw_user_meta_data->>'avatar_url', ''), 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80'),
+    coalesce(nullif(new.raw_user_meta_data->>'avatar_url', ''), public.default_connect_avatar_url()),
     coalesce(nullif(new.raw_user_meta_data->>'banner_url', ''), 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80'),
     coalesce(nullif(new.raw_user_meta_data->>'bio', ''), 'New to CONNECT.'),
     coalesce(new.raw_user_meta_data->>'location', ''),

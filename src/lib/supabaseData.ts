@@ -21,6 +21,9 @@ type ProfileRow = {
   verified?: boolean | null;
 };
 
+export const DEFAULT_AVATAR_URL =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'%3E%3Crect width='240' height='240' rx='120' fill='%23e5e7eb'/%3E%3Ccircle cx='120' cy='92' r='42' fill='%239ca3af'/%3E%3Cpath d='M48 211c10-45 42-70 72-70s62 25 72 70' fill='%239ca3af'/%3E%3C/svg%3E";
+
 type PostRow = {
   id: string;
   author_id: string;
@@ -233,6 +236,7 @@ export function normalizeUsername(value: string, fallback = "connectuser") {
     .replace(/[^a-zA-Z0-9_]/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "")
+    .replace(/_[0-9a-fA-F]{5,8}$/, "")
     .slice(0, 24);
   return cleaned || fallback;
 }
@@ -297,7 +301,7 @@ export async function completeAuthRedirect() {
     bio: user.user_metadata?.bio || "New to CONNECT.",
     location: user.user_metadata?.location || "",
     website: user.user_metadata?.website || "",
-    avatarUrl: user.user_metadata?.avatar_url,
+    avatarUrl: user.user_metadata?.avatar_url || DEFAULT_AVATAR_URL,
     bannerUrl: user.user_metadata?.banner_url
   });
   return user.id;
@@ -329,6 +333,7 @@ export async function signUpWithPassword(email: string, password: string, profil
     throw new Error("An account with this email already exists. Sign in instead.");
   }
   const username = await resolveAvailableUsername(profile.username || email.split("@")[0]);
+  const displayName = profile?.displayName?.trim() || username;
 
   const { data: signUpData, error: signUpError } = await client.auth.signUp({
     email,
@@ -336,12 +341,14 @@ export async function signUpWithPassword(email: string, password: string, profil
     options: {
       emailRedirectTo: authRedirectUrl("confirmed"),
       data: {
-        display_name: profile?.displayName || email.split("@")[0],
+        display_name: displayName,
+        full_name: displayName,
+        name: displayName,
         username,
         bio: profile?.bio,
         location: profile?.location,
         website: profile?.website,
-        avatar_url: profile?.avatarUrl,
+        avatar_url: profile?.avatarUrl || DEFAULT_AVATAR_URL,
         banner_url: profile?.bannerUrl
       }
     }
@@ -455,7 +462,7 @@ export async function ensureProfile(userId: string, email: string, profile?: Sig
       id: userId,
       display_name: profile?.displayName || username,
       username,
-      avatar_url: profile?.avatarUrl || undefined,
+      avatar_url: profile?.avatarUrl || DEFAULT_AVATAR_URL,
       banner_url: profile?.bannerUrl || undefined,
       bio: profile?.bio || "New to CONNECT.",
       location: profile?.location || "",
@@ -475,12 +482,14 @@ export async function ensureProfile(userId: string, email: string, profile?: Sig
 export async function updateProfileReal(userId: string, profile: ProfileUpdate) {
   const client = requireSupabase();
   const username = await resolveAvailableUsername(profile.username, userId);
+  const displayName = profile.displayName.trim();
+  const avatarUrl = profile.avatarUrl.trim() || DEFAULT_AVATAR_URL;
   const { data, error } = await client
     .from("profiles")
     .update({
-      display_name: profile.displayName.trim(),
+      display_name: displayName,
       username,
-      avatar_url: profile.avatarUrl.trim(),
+      avatar_url: avatarUrl,
       banner_url: profile.bannerUrl.trim(),
       bio: profile.bio.trim(),
       location: profile.location.trim(),
@@ -495,6 +504,16 @@ export async function updateProfileReal(userId: string, profile: ProfileUpdate) 
     .select("*")
     .single();
   if (error) throw error;
+  const { error: authError } = await client.auth.updateUser({
+    data: {
+      display_name: displayName,
+      full_name: displayName,
+      name: displayName,
+      username,
+      avatar_url: avatarUrl
+    }
+  });
+  if (authError) throw authError;
   return toUser(data as ProfileRow);
 }
 

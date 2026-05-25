@@ -284,7 +284,7 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
         </div>
         <div className="mt-4 rounded-2xl border border-slate-200 p-4 dark:border-white/10">
           <p className="text-sm font-bold">Email</p>
-          <p className="mt-1 text-sm text-slate-500">Change the email you use to sign in. Supabase may ask you to confirm the new address before it takes effect.</p>
+          <p className="mt-1 text-sm text-slate-500">Change the email you use to sign in. You may need to confirm the new address before it takes effect.</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
             <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="you@example.com" autoComplete="email" />
             <button type="button" disabled={saving || !email.trim()} onClick={() => void saveEmail()} className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">Change email</button>

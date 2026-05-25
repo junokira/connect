@@ -212,7 +212,7 @@ export const useAppStore = create<AppState>()(
             backendMode: "supabase",
             loading: false,
             authed: false,
-            error: "CONNECT needs Supabase environment variables before launch: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY."
+            error: "CONNECT cannot reach the AWAKEN CULT sign-in service yet."
           });
           return;
         }
@@ -253,7 +253,7 @@ export const useAppStore = create<AppState>()(
       },
       signIn: async (email, password) => {
         if (!isSupabaseConfigured) {
-          set({ error: "Supabase is required for sign in. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel." });
+          set({ error: "CONNECT cannot reach the AWAKEN CULT sign-in service yet." });
           return;
         }
         try {
@@ -271,7 +271,7 @@ export const useAppStore = create<AppState>()(
       },
       signUp: async (email, password, profile) => {
         if (!isSupabaseConfigured) {
-          set({ error: "Supabase is required for sign up. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel." });
+          set({ error: "CONNECT cannot reach the AWAKEN CULT sign-in service yet." });
           return false;
         }
         try {
