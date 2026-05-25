@@ -563,7 +563,10 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
             </button>
             <div className="flex items-center gap-2">
               {isOwnProfile ? (
-                <button onClick={() => setEditing(true)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Edit profile</button>
+                <>
+                  <button onClick={() => setEditing(true)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Edit profile</button>
+                  <button onClick={() => setVerificationOpen(true)} className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" aria-label="Verification settings"><BadgeCheck size={17} /></button>
+                </>
               ) : isBlocked ? (
                 <button onClick={() => onUnblockUser?.(user.id)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Unblock</button>
               ) : (
@@ -766,7 +769,13 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
       {networkList ? (
         <div onMouseDown={() => setNetworkList(undefined)} className="fixed inset-0 z-[72] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-          <section onMouseDown={(event) => event.stopPropagation()} className="modal-enter thin-scrollbar max-h-[80dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
+          <section
+            onMouseDown={(event) => event.stopPropagation()}
+            onWheel={(event) => event.stopPropagation()}
+            onTouchMove={(event) => event.stopPropagation()}
+            className="modal-enter thin-scrollbar max-h-[80dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl"
+            style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+          >
             <div className="mb-4 flex items-center justify-between">
               <p className="text-lg font-black">{networkList === "followers" ? "Followers" : "Following"}</p>
               <button onClick={() => setNetworkList(undefined)} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close network list"><X size={19} /></button>

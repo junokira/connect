@@ -17,6 +17,7 @@ type Props = {
   bookmarked?: boolean;
   density?: "compact" | "standard" | "expanded";
   widthClass?: string;
+  showIdentityStripe?: boolean;
   currentUserId?: string;
   muted?: boolean;
   onEdit?: () => void;
@@ -42,7 +43,7 @@ const postTypeIcon = {
   link: ExternalLink
 };
 
-export function PostCard({ post, author, emphasized, liked, reposted, bookmarked, density = "standard", widthClass, currentUserId, muted, onEdit, onDelete, onMute, onReport, onHashtagClick, onPinPost, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
+export function PostCard({ post, author, emphasized, liked, reposted, bookmarked, density = "standard", widthClass, showIdentityStripe = false, currentUserId, muted, onEdit, onDelete, onMute, onReport, onHashtagClick, onPinPost, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [brokenMedia, setBrokenMedia] = useState(false);
   const [delta, setDelta] = useState<"" | "+1" | "-1">("");
@@ -155,7 +156,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
       }`}
       onClick={onOpen}
     >
-      <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-l-2xl" style={{ background: authorColor(author.id) }} />
+      {showIdentityStripe ? <div className="absolute bottom-0 left-0 top-0 w-[2px] rounded-l-2xl opacity-55" style={{ background: authorColor(author.id) }} /> : null}
       {showConfetti ? (
         <div className="confetti-burst" aria-hidden="true">
           {confettiPieces.map((piece, index) => (

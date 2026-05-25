@@ -28,6 +28,7 @@ type Props = {
   onPinPost?: (id: string) => void;
   className?: string;
   recenterSignal?: number;
+  overviewSignal?: number;
   interactive?: boolean;
   interactionMode?: "full" | "horizontal" | "none";
   showControls?: boolean;
@@ -84,7 +85,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: topic + column * 214 - 428, y: (day % 9) * 28 + row * 268 - 190 };
 };
 
-export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0, interactive = true, interactionMode, showControls = true }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0, overviewSignal = 0, interactive = true, interactionMode, showControls = true }: Props) {
   const mode = interactionMode || (interactive ? "full" : "none");
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
@@ -191,10 +192,6 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
         animationRef.current = null;
       }
       if (mode === "horizontal") {
-        const horizontalDelta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.shiftKey ? event.deltaY : 0;
-        if (!horizontalDelta) return;
-        event.preventDefault();
-        scheduleView({ ...viewRef.current, x: clampHorizontalX(viewRef.current.x - horizontalDelta * 1.08) });
         return;
       }
       event.preventDefault();
@@ -222,6 +219,20 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     const nextX = -(latest.position.x + CANVAS_CARD_CENTER_X);
     animateView({ x: mode === "horizontal" ? clampHorizontalX(nextX) : nextX, y: -(latest.position.y + CANVAS_CARD_CENTER_Y), zoom: mode === "horizontal" ? 0.9 : 1.05 }, mode === "horizontal" ? 360 : 520);
   }, [animateView, clampHorizontalX, mode, positionedPosts]);
+
+  const centerOverview = useCallback(() => {
+    if (!positionedPosts.length) return;
+    const minX = Math.min(...positionedPosts.map(({ position }) => position.x));
+    const maxX = Math.max(...positionedPosts.map(({ position }) => position.x + CANVAS_CARD_WIDTH));
+    const minY = Math.min(...positionedPosts.map(({ position }) => position.y));
+    const maxY = Math.max(...positionedPosts.map(({ position }) => position.y + CANVAS_CARD_HEIGHT));
+    const contentWidth = Math.max(CANVAS_CARD_WIDTH, maxX - minX);
+    const contentHeight = Math.max(CANVAS_CARD_HEIGHT, maxY - minY);
+    const nextZoom = clampZoom(Math.min(1, Math.max(0.42, Math.min((size.width - 96) / contentWidth, (size.height - 128) / contentHeight))));
+    const centerX = minX + contentWidth / 2;
+    const centerY = minY + contentHeight / 2;
+    animateView({ x: -centerX, y: -centerY, zoom: nextZoom }, 540);
+  }, [animateView, positionedPosts, size.height, size.width]);
 
   const visiblePosts = useMemo(() => {
     const padding = 640;
@@ -254,6 +265,11 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     if (!recenterSignal) return;
     centerLatest();
   }, [centerLatest, recenterSignal]);
+
+  useEffect(() => {
+    if (!overviewSignal) return;
+    centerOverview();
+  }, [centerOverview, overviewSignal]);
 
   const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
     event.stopPropagation();
@@ -399,6 +415,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
                 author={author}
                 emphasized={emphasized}
                 density={cardMode}
+                showIdentityStripe
                 currentUserId={currentUserId}
                 muted={mutes.some((mute) => mute.mutedId === author.id)}
                 liked={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "like")}

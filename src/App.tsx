@@ -12,6 +12,7 @@ import { VerifiedBadge } from "./components/VerifiedBadge";
 import { supabase } from "./lib/supabase";
 import { useAppStore } from "./store/useAppStore";
 import { FeedScope, FeedStyle, SortMode } from "./types";
+import { playNotification, unlockAudio } from "./utils/audio";
 import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y } from "./utils/canvasLayout";
 import { getYoutubeThumbnail } from "./utils/media";
 import { getFilteredPosts } from "./utils/posts";
@@ -537,6 +538,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<"canvas" | "explore" | "search" | "activity">("canvas");
   const [feedScope, setFeedScope] = useState<FeedScope>("everyone");
   const [canvasRecenterSignal, setCanvasRecenterSignal] = useState(0);
+  const [canvasOverviewSignal, setCanvasOverviewSignal] = useState(0);
   const [editingPostId, setEditingPostId] = useState<string | undefined>();
   const [profileCanvasFullscreen, setProfileCanvasFullscreen] = useState(false);
   const refreshTimer = useRef<number | undefined>(undefined);
@@ -632,6 +634,11 @@ export default function App() {
     setActiveView("canvas");
     setCanvasRecenterSignal((value) => value + 1);
   }, [setActiveProfile]);
+  const openHomeOverview = useCallback(() => {
+    setActiveProfile(undefined);
+    setActiveView("canvas");
+    setCanvasOverviewSignal((value) => value + 1);
+  }, [setActiveProfile]);
   const openExplore = useCallback(() => {
     setActiveProfile(undefined);
     setActiveView("explore");
@@ -680,7 +687,7 @@ export default function App() {
           currentUser={currentUser}
           activeView={activeView}
           unreadCount={unreadNotificationCount}
-          onHome={recenterCanvas}
+          onHome={openHomeOverview}
           onExplore={openExplore}
           onActivity={openActivity}
           onCreate={openComposer}
@@ -699,7 +706,7 @@ export default function App() {
             {!chromeHidden ? <button onClick={() => setAdjustOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Adjust canvas">
               <SlidersHorizontal size={18} />
             </button> : null}
-            {!chromeHidden ? <button onClick={toggleSound} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label={soundEnabled ? "Disable CONNECT sounds" : "Enable CONNECT sounds"}>
+            {!chromeHidden ? <button onClick={() => { unlockAudio(); if (!soundEnabled) playNotification(); toggleSound(); }} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label={soundEnabled ? "Disable CONNECT sounds" : "Enable CONNECT sounds"}>
               {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
             </button> : null}
             {chromeHidden ? (
@@ -734,6 +741,7 @@ export default function App() {
             onHashtagClick={handleHashtagClick}
             onPinPost={(id) => void pinPost(id)}
             recenterSignal={canvasRecenterSignal}
+            overviewSignal={canvasOverviewSignal}
           />
         ) : activeView === "explore" ? (
           <ExploreView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={openPost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
@@ -749,7 +757,7 @@ export default function App() {
           activeView={activeView}
           profileActive={Boolean(activeProfile)}
           unreadCount={unreadNotificationCount}
-          onHome={recenterCanvas}
+          onHome={openHomeOverview}
           onExplore={openExplore}
           onCreate={openComposer}
           onActivity={openActivity}
