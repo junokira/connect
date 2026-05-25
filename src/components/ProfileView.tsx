@@ -509,6 +509,9 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
     const deltaY = Math.abs(touch.clientY - start.y);
     if (deltaX > 100 && deltaX > deltaY * 1.5) onClose();
   };
+  const stopFullscreenControlEvent = (event: MouseEvent | TouchEvent) => {
+    event.stopPropagation();
+  };
 
   return (
     <div ref={scrollerRef} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter fixed inset-0 z-20 overflow-y-auto bg-[#f5f5f7] pb-24 text-slate-950 dark:bg-[#050505] dark:text-white lg:left-72 lg:pb-0">
@@ -638,11 +641,35 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
               aria-label={canvasFullscreen ? "Canvas fullscreen view" : undefined}
             >
               {canvasFullscreen ? (
-                <button onClick={() => setCanvasFullscreen(false)} className="pointer-events-auto absolute left-3 top-3 z-[81] grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white/88 text-slate-950 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 dark:text-white" aria-label="Close fullscreen canvas">
+                <button
+                  onMouseDown={stopFullscreenControlEvent}
+                  onTouchStart={stopFullscreenControlEvent}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setCanvasFullscreen(false);
+                  }}
+                  className="pointer-events-auto absolute left-3 top-[calc(env(safe-area-inset-top)+12px)] z-[81] grid h-12 w-12 place-items-center rounded-2xl border border-slate-200 bg-white/88 text-slate-950 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 dark:text-white"
+                  aria-label="Close fullscreen canvas"
+                >
                   <X size={18} />
                 </button>
               ) : null}
-              <button onClick={() => setCanvasFullscreen((value) => !value)} className="pointer-events-auto absolute right-3 top-3 z-[81] flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88" aria-label={canvasFullscreen ? "Minimize profile canvas" : "Open profile canvas fullscreen"}>
+              <button
+                onMouseDown={canvasFullscreen ? stopFullscreenControlEvent : undefined}
+                onTouchStart={canvasFullscreen ? stopFullscreenControlEvent : undefined}
+                onClick={(event) => {
+                  if (canvasFullscreen) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setCanvasFullscreen(false);
+                    return;
+                  }
+                  setCanvasFullscreen(true);
+                }}
+                className={`pointer-events-auto absolute z-[81] flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 ${canvasFullscreen ? "right-3 top-[calc(env(safe-area-inset-top)+12px)]" : "right-3 top-3"}`}
+                aria-label={canvasFullscreen ? "Minimize profile canvas" : "Open profile canvas fullscreen"}
+              >
                 {canvasFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 <span>{canvasFullscreen ? "Minimize" : "Open canvas"}</span>
               </button>

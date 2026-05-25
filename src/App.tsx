@@ -664,7 +664,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white">
-      {!chromeHidden ? (
+      {!chromeHidden && !profileCanvasFullscreen ? (
         <Sidebar
           currentUser={currentUser}
           activeView={activeView}
@@ -678,21 +678,23 @@ export default function App() {
         />
       ) : null}
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <header className={`fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 ${chromeHidden ? "" : "lg:left-72"}`}>
-          {!chromeHidden ? <div className="hidden lg:block"><SearchBox compact onFocus={() => setActiveView("search")} /></div> : null}
-          {!chromeHidden && error ? <span className="hidden max-w-72 truncate rounded-2xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200 lg:block">{error}</span> : null}
-          {!chromeHidden ? <button onClick={() => setActiveView("search")} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Search current canvas">
-            <Search size={18} />
-          </button> : null}
-          {!chromeHidden ? <button onClick={() => setAdjustOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Adjust canvas">
-            <SlidersHorizontal size={18} />
-          </button> : null}
-          {chromeHidden ? (
-            <button onClick={() => setChromeHidden(false)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Show interface">
-              <Eye size={18} />
-            </button>
-          ) : null}
-        </header>
+        {!profileCanvasFullscreen ? (
+          <header className={`fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 ${chromeHidden ? "" : "lg:left-72"}`}>
+            {!chromeHidden ? <div className="hidden lg:block"><SearchBox compact onFocus={() => setActiveView("search")} /></div> : null}
+            {!chromeHidden && error ? <span className="hidden max-w-72 truncate rounded-2xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200 lg:block">{error}</span> : null}
+            {!chromeHidden ? <button onClick={() => setActiveView("search")} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Search current canvas">
+              <Search size={18} />
+            </button> : null}
+            {!chromeHidden ? <button onClick={() => setAdjustOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Adjust canvas">
+              <SlidersHorizontal size={18} />
+            </button> : null}
+            {chromeHidden ? (
+              <button onClick={() => setChromeHidden(false)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Show interface">
+                <Eye size={18} />
+              </button>
+            ) : null}
+          </header>
+        ) : null}
 
         {activeView === "canvas" ? (
           <CanvasFeed
