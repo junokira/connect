@@ -1,5 +1,5 @@
 import { Apple, Eye, EyeOff, ImageOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, Volume2, VolumeX, X } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasFeed } from "./components/CanvasFeed";
 import { ActivityView as NotificationsActivityView } from "./components/ActivityView";
 import { Composer } from "./components/Composer";
@@ -11,7 +11,7 @@ import { Sidebar } from "./components/Sidebar";
 import { VerifiedBadge } from "./components/VerifiedBadge";
 import { supabase } from "./lib/supabase";
 import { useAppStore } from "./store/useAppStore";
-import { FeedScope, FeedStyle, SortMode } from "./types";
+import { FeedScope, FeedStyle, SortMode, User } from "./types";
 import { playNotification, unlockAudio } from "./utils/audio";
 import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y } from "./utils/canvasLayout";
 import { getYoutubeThumbnail } from "./utils/media";
@@ -541,8 +541,11 @@ export default function App() {
   const [canvasOverviewSignal, setCanvasOverviewSignal] = useState(0);
   const [editingPostId, setEditingPostId] = useState<string | undefined>();
   const [profileCanvasFullscreen, setProfileCanvasFullscreen] = useState(false);
+  const [refreshPull, setRefreshPull] = useState(0);
+  const [refreshingPull, setRefreshingPull] = useState(false);
   const refreshTimer = useRef<number | undefined>(undefined);
   const focusedInitialCluster = useRef(false);
+  const pullRef = useRef<{ y: number; active: boolean } | null>(null);
 
   useEffect(() => {
     void initialize();
@@ -619,6 +622,44 @@ export default function App() {
   const activeAuthor = activePost ? users.find((user) => user.id === activePost.authorId) : undefined;
   const activeProfile = users.find((user) => user.id === activeProfileId);
   const latest = [...canvasPosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  useEffect(() => {
+    const setMeta = (attribute: "name" | "property", key: string, value: string) => {
+      let element = document.head.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
+      if (!element) {
+        element = document.createElement("meta");
+        element.setAttribute(attribute, key);
+        document.head.appendChild(element);
+      }
+      element.setAttribute("content", value);
+    };
+    const title = activePost && activeAuthor
+      ? `Post by ${activeAuthor.displayName} on CONNECT`
+      : activeProfile
+        ? `${activeProfile.displayName} (@${activeProfile.username}) on CONNECT`
+        : "CONNECT by AWAKEN CULT";
+    const description = activePost
+      ? (activePost.content || activePost.caption || "A CONNECT post").slice(0, 160)
+      : activeProfile
+        ? (activeProfile.bio || `Explore @${activeProfile.username}'s CONNECT profile.`).slice(0, 160)
+        : "Explore AWAKEN CULT's spatial social world.";
+    const image = activePost?.imageUrl || activePost?.thumbnailUrl || activePost?.sourceThumb || activeProfile?.bannerUrl || activeProfile?.avatarUrl || "";
+    const url = activePost
+      ? `${window.location.origin}?post=${activePost.id}`
+      : activeProfile
+        ? `${window.location.origin}?profile=${activeProfile.id}`
+        : `${window.location.origin}/`;
+    document.title = title;
+    setMeta("name", "description", description);
+    setMeta("property", "og:title", title);
+    setMeta("property", "og:description", description);
+    setMeta("property", "og:url", url);
+    setMeta("name", "twitter:title", title);
+    setMeta("name", "twitter:description", description);
+    if (image) {
+      setMeta("property", "og:image", image);
+      setMeta("name", "twitter:image", image);
+    }
+  }, [activeAuthor, activePost, activeProfile]);
   const reactionState = (postId: string) => ({
     liked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "like"),
     reposted: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "repost"),
@@ -654,11 +695,73 @@ export default function App() {
     setActivePost(id);
     if (id) window.history.pushState({}, "", `?post=${id}`);
   }, [setActivePost]);
+  const openProfile = useCallback((id?: string) => {
+    setActiveProfile(id);
+    if (id) window.history.pushState({}, "", `?profile=${id}`);
+  }, [setActiveProfile]);
   const closePost = useCallback(() => {
     setEditingPostId(undefined);
     setActivePost(undefined);
     window.history.pushState({}, "", "/");
   }, [setActivePost]);
+  const closeProfile = useCallback(() => {
+    setActiveProfile(undefined);
+    window.history.pushState({}, "", "/");
+  }, [setActiveProfile]);
+  const shareProfile = useCallback(async (profile: User) => {
+    const url = `${window.location.origin}?profile=${profile.id}`;
+    const title = `${profile.displayName} (@${profile.username}) on CONNECT`;
+    const text = profile.verified ? `Verified CONNECT profile: @${profile.username}` : `CONNECT profile: @${profile.username}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+    } catch {
+      await navigator.clipboard?.writeText(url).catch(() => undefined);
+    }
+  }, []);
+  const runPullRefresh = useCallback(async () => {
+    if (refreshingPull) return;
+    setRefreshingPull(true);
+    setRefreshPull(72);
+    try {
+      await refreshData();
+    } finally {
+      window.setTimeout(() => {
+        setRefreshingPull(false);
+        setRefreshPull(0);
+      }, 420);
+    }
+  }, [refreshData, refreshingPull]);
+  const handlePullStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 1) return;
+    const target = event.target as HTMLElement;
+    if (target.closest(".canvas-viewport,[role='dialog'],input,textarea,select,button,a,iframe,video")) return;
+    const scrollParent = target.closest<HTMLElement>(".thin-scrollbar, [data-scroll-root='profile']");
+    const atTop = !scrollParent || scrollParent.scrollTop <= 2;
+    pullRef.current = { y: event.touches[0].clientY, active: atTop };
+  }, []);
+  const handlePullMove = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    const start = pullRef.current;
+    if (!start?.active || refreshingPull) return;
+    const delta = event.touches[0].clientY - start.y;
+    if (delta <= 0) {
+      setRefreshPull(0);
+      return;
+    }
+    setRefreshPull(Math.min(86, delta * 0.42));
+  }, [refreshingPull]);
+  const handlePullEnd = useCallback(() => {
+    const shouldRefresh = refreshPull > 58;
+    pullRef.current = null;
+    if (shouldRefresh) {
+      void runPullRefresh();
+      return;
+    }
+    setRefreshPull(0);
+  }, [refreshPull, runPullRefresh]);
   const handleHashtagClick = useCallback((tag: string) => {
     useAppStore.getState().setSearch(`#${tag}`);
     setActiveView("search");
@@ -681,7 +784,19 @@ export default function App() {
   if (!authed || !currentUser) return <AuthGate />;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white">
+    <div
+      className="flex h-screen overflow-hidden bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white"
+      onTouchStart={handlePullStart}
+      onTouchMove={handlePullMove}
+      onTouchEnd={handlePullEnd}
+      onTouchCancel={handlePullEnd}
+    >
+      <div
+        className="pointer-events-none fixed left-1/2 top-[max(12px,env(safe-area-inset-top))] z-[90] -translate-x-1/2 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-xs font-black text-slate-600 shadow-glass backdrop-blur-xl transition-all duration-200 dark:border-white/10 dark:bg-slate-950/90 dark:text-slate-200"
+        style={{ opacity: refreshPull > 8 || refreshingPull ? 1 : 0, transform: `translate(-50%, ${Math.max(0, refreshPull - 18)}px) scale(${refreshingPull ? 1 : 0.94 + Math.min(refreshPull, 70) / 700})` }}
+      >
+        {refreshingPull ? "Refreshing..." : refreshPull > 58 ? "Release to refresh" : "Pull to refresh"}
+      </div>
       {!chromeHidden && !profileCanvasFullscreen ? (
         <Sidebar
           currentUser={currentUser}
@@ -691,7 +806,7 @@ export default function App() {
           onExplore={openExplore}
           onActivity={openActivity}
           onCreate={openComposer}
-          onProfile={() => setActiveProfile(currentUser.id)}
+          onProfile={() => openProfile(currentUser.id)}
           onSignOut={() => void signOut()}
         />
       ) : null}
@@ -728,7 +843,7 @@ export default function App() {
             view={canvasView}
             onViewChange={setCanvasView}
             onOpenPost={openPost}
-            onOpenProfile={setActiveProfile}
+            onOpenProfile={openProfile}
             onLikePost={(id) => void likePost(id)}
             onRepostPost={(id) => void repostPost(id)}
             onBookmarkPost={(id) => void bookmarkPost(id)}
@@ -744,11 +859,11 @@ export default function App() {
             overviewSignal={canvasOverviewSignal}
           />
         ) : activeView === "explore" ? (
-          <ExploreView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={openPost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
+          <ExploreView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={openPost} onOpenProfile={openProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         ) : activeView === "activity" ? (
-          <NotificationsActivityView notifications={notifications} users={users} posts={posts} onMarkAllRead={() => void markNotificationsRead()} onOpenPost={openPost} onOpenProfile={setActiveProfile} />
+          <NotificationsActivityView notifications={notifications} users={users} posts={posts} onMarkAllRead={() => void markNotificationsRead()} onOpenPost={openPost} onOpenProfile={openProfile} />
         ) : (
-          <SearchView posts={searchPosts} users={users} reactionState={reactionState} onOpenPost={openPost} onOpenProfile={setActiveProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
+          <SearchView posts={searchPosts} users={users} reactionState={reactionState} onOpenPost={openPost} onOpenProfile={openProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
         )}
       </div>
 
@@ -761,7 +876,7 @@ export default function App() {
           onExplore={openExplore}
           onCreate={openComposer}
           onActivity={openActivity}
-          onProfile={() => setActiveProfile(currentUser.id)}
+          onProfile={() => openProfile(currentUser.id)}
         />
       ) : null}
 
@@ -806,7 +921,7 @@ export default function App() {
         onLikeComment={(id) => void likeComment(id)}
         onDeleteComment={(id) => activePost && void deleteComment(id, activePost.id)}
         onAddCommentExtended={(content, options) => activePost && void addCommentExtended(activePost.id, content, options)}
-        onOpenProfile={(id) => setActiveProfile(id)}
+        onOpenProfile={openProfile}
         onHashtagClick={handleHashtagClick}
       />
       <ProfileView
@@ -821,8 +936,8 @@ export default function App() {
         follows={follows}
         blocks={blocks}
         mutes={mutes}
-        onClose={() => setActiveProfile(undefined)}
-        onOpenProfile={setActiveProfile}
+        onClose={closeProfile}
+        onOpenProfile={openProfile}
         onOpenPost={openPost}
         onLikePost={(id) => void likePost(id)}
         onRepostPost={(id) => void repostPost(id)}
@@ -832,6 +947,7 @@ export default function App() {
         onUpdatePassword={updatePassword}
         onUpdateEmail={updateEmail}
         onRequestVerification={requestVerification}
+        onShareProfile={shareProfile}
         onBlockUser={(id) => void blockUser(id)}
         onUnblockUser={(id) => void unblockUser(id)}
         onMuteUser={(id) => void muteUser(id)}

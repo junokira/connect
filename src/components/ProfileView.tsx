@@ -1,4 +1,4 @@
-import { BadgeCheck, Bookmark, CalendarDays, Heart, ImagePlus, Link as LinkIcon, Loader2, MapPin, Maximize2, Menu, Minimize2, Pencil, Repeat2, Settings, Shield, Upload, X } from "lucide-react";
+import { BadgeCheck, Bookmark, CalendarDays, Heart, ImagePlus, Link as LinkIcon, Loader2, MapPin, Maximize2, Menu, Minimize2, Pencil, Repeat2, Settings, Share2, Shield, Upload, X } from "lucide-react";
 import { FormEvent, MouseEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasView, Follow, Post, PostReaction, ProfileUpdate, User, UserBlock, UserMute, VerificationRequestStatus } from "../types";
 import { normalizeExternalUrl } from "../utils/media";
@@ -30,6 +30,7 @@ type Props = {
   onUpdatePassword: (password: string) => Promise<void>;
   onUpdateEmail: (email: string) => Promise<{ email: string; pendingEmail: string }>;
   onRequestVerification: (reason?: string) => Promise<void>;
+  onShareProfile?: (user: User) => void;
   onBlockUser?: (id: string) => void;
   onUnblockUser?: (id: string) => void;
   onMuteUser?: (id: string) => void;
@@ -204,8 +205,8 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
 
   return (
     <div onMouseDown={onClose} className="fixed inset-0 z-[60] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <form onSubmit={submit} onMouseDown={stop} className="thin-scrollbar flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
-        <div className="overflow-y-auto p-5 pb-6">
+      <form onSubmit={submit} onMouseDown={stop} className="thin-scrollbar flex h-[min(92dvh,760px)] max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 pb-6">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-lg font-black">Edit profile</p>
@@ -313,7 +314,7 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
         </div>
         {error ? <p className="mt-4 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
         </div>
-        <div className="sticky bottom-0 z-10 grid gap-2 border-t border-slate-200 bg-white/94 p-4 pb-[max(16px,calc(env(safe-area-inset-bottom)+96px))] backdrop-blur dark:border-white/10 dark:bg-[#0f1115]/94 sm:grid-cols-2 sm:pb-4">
+        <div className="z-10 grid shrink-0 gap-2 border-t border-slate-200 bg-white/94 p-4 pb-[max(16px,calc(env(safe-area-inset-bottom)+96px))] backdrop-blur dark:border-white/10 dark:bg-[#0f1115]/94 sm:grid-cols-2 sm:pb-4">
           <button type="button" onClick={onClose} disabled={saving} className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold disabled:opacity-50 dark:border-white/15">Cancel</button>
         <button disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950">
           {saving ? <Loader2 className="animate-spin" size={17} /> : <Pencil size={17} />}
@@ -410,7 +411,7 @@ function FullscreenMedia({ src, label, shape, onClose }: { src: string; label: s
   );
 }
 
-export function ProfileView({ user, currentUserId, currentUserEmail, verificationStatus, verificationReason, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onBlockUser, onUnblockUser, onReportUser, onCanvasFullscreenChange }: Props) {
+export function ProfileView({ user, currentUserId, currentUserEmail, verificationStatus, verificationReason, users, posts, reactions, follows, blocks = [], mutes, onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onShareProfile, onBlockUser, onUnblockUser, onReportUser, onCanvasFullscreenChange }: Props) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("Canvas");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
@@ -452,6 +453,15 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
       onCanvasFullscreenChange?.(false);
     };
   }, [canvasFullscreen, onCanvasFullscreenChange]);
+
+  useEffect(() => {
+    if (!networkList) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [networkList]);
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0, behavior: "auto" });
@@ -513,9 +523,12 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   const stopFullscreenControlEvent = (event: MouseEvent | TouchEvent) => {
     event.stopPropagation();
   };
+  const shareProfile = () => {
+    onShareProfile?.(user);
+  };
 
   return (
-    <div ref={scrollerRef} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter fixed inset-0 z-20 overflow-y-auto bg-[#f5f5f7] pb-24 text-slate-950 dark:bg-[#050505] dark:text-white lg:left-72 lg:pb-0">
+    <div ref={scrollerRef} data-scroll-root="profile" onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter fixed inset-0 z-20 overflow-y-auto bg-[#f5f5f7] pb-24 text-slate-950 dark:bg-[#050505] dark:text-white lg:left-72 lg:pb-0">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
         <div className="min-w-0">
           <p className="flex items-center gap-1 font-bold">
@@ -539,6 +552,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
             <div className="absolute right-0 top-12 z-[74] w-64 rounded-3xl border border-slate-200 bg-white/95 p-2 text-sm shadow-2xl backdrop-blur dark:border-white/10 dark:bg-slate-950/95">
               <button onClick={() => { setActiveTab("Media"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><ImagePlus size={17} /> Media</button>
               <button onClick={() => { setActiveTab("Reposts"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Repeat2 size={17} /> Reposts</button>
+              <button onClick={() => { shareProfile(); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Share2 size={17} /> Share profile</button>
               {isOwnProfile ? (
                 <>
                   <button onClick={() => { setActiveTab("Likes"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Heart size={17} /> Liked posts</button>
@@ -566,6 +580,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
                 <>
                   <button onClick={() => setEditing(true)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Edit profile</button>
                   <button onClick={() => setVerificationOpen(true)} className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" aria-label="Verification settings"><BadgeCheck size={17} /></button>
+                  <button onClick={shareProfile} className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" aria-label="Share profile"><Share2 size={17} /></button>
                 </>
               ) : isBlocked ? (
                 <button onClick={() => onUnblockUser?.(user.id)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Unblock</button>
@@ -675,17 +690,12 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
                   }
                   setCanvasFullscreen(true);
                 }}
-                className={`pointer-events-auto absolute z-[81] flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 ${canvasFullscreen ? "right-3 top-[calc(env(safe-area-inset-top)+12px)]" : "right-3 top-3"}`}
+                className={`pointer-events-auto absolute z-[81] flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 ${canvasFullscreen ? "right-3 top-[calc(env(safe-area-inset-top)+12px)]" : "left-1/2 top-3 -translate-x-1/2"}`}
                 aria-label={canvasFullscreen ? "Minimize profile canvas" : "Open profile canvas fullscreen"}
               >
                 {canvasFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 <span>{canvasFullscreen ? "Minimize" : "Open canvas"}</span>
               </button> : null}
-              {!canvasFullscreen ? (
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[#f5f5f7] via-[#f5f5f7]/70 to-transparent p-5 text-sm font-semibold text-slate-500 dark:from-[#050505] dark:via-[#050505]/70">
-                  Swipe sideways to explore. Open canvas for full pan and zoom.
-                </div>
-              ) : null}
               <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="gallery" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={(id) => { setCanvasFullscreen(false); onOpenPost(id); }} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" interactionMode={canvasFullscreen ? "full" : "horizontal"} showControls={canvasFullscreen} />
             </div>
           ) : activeTab === "Media" ? (
@@ -718,7 +728,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
                 <p className="absolute left-5 top-5 rounded-full bg-white/90 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-950 shadow-glass backdrop-blur">Spotlight</p>
               </div>
               <div className="flex flex-col gap-4 p-5 sm:-mt-16 sm:flex-row sm:items-end">
-                <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-3xl border-4 border-white bg-slate-100 shadow-2xl dark:border-[#111113] dark:bg-white/10">
+                <div className="relative mx-auto h-32 w-32 shrink-0 overflow-hidden rounded-3xl border-4 border-white bg-slate-100 shadow-2xl dark:border-[#111113] dark:bg-white/10 sm:mx-0">
                   {user.featuredCoverUrl ? <img className="h-full w-full object-cover" src={user.featuredCoverUrl} alt="" loading="lazy" /> : null}
                 </div>
                 <div className="relative min-w-0 flex-1 text-center sm:text-left">
@@ -768,19 +778,21 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
       {verificationOpen ? <VerificationSheet user={user} isOwnProfile={isOwnProfile} status={verificationStatus} reason={verificationReason} onClose={() => setVerificationOpen(false)} onRequestVerification={onRequestVerification} /> : null}
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
       {networkList ? (
-        <div onMouseDown={() => setNetworkList(undefined)} className="fixed inset-0 z-[72] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+        <div onMouseDown={() => setNetworkList(undefined)} onWheel={(event) => event.preventDefault()} onTouchMove={(event) => event.preventDefault()} className="fixed inset-0 z-[72] grid place-items-end overflow-hidden bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
           <section
             onMouseDown={(event) => event.stopPropagation()}
-            onWheel={(event) => event.stopPropagation()}
-            onTouchMove={(event) => event.stopPropagation()}
-            className="modal-enter thin-scrollbar max-h-[80dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl"
-            style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+            className="modal-enter flex h-[min(82dvh,620px)] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl"
           >
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex shrink-0 items-center justify-between">
               <p className="text-lg font-black">{networkList === "followers" ? "Followers" : "Following"}</p>
               <button onClick={() => setNetworkList(undefined)} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close network list"><X size={19} /></button>
             </div>
-            <div className="space-y-2">
+            <div
+              className="thin-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1"
+              onWheel={(event) => event.stopPropagation()}
+              onTouchMove={(event) => event.stopPropagation()}
+              style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+            >
               {users
                 .filter((candidate) => networkList === "followers"
                   ? follows.some((follow) => follow.followingId === user.id && follow.followerId === candidate.id)

@@ -95,12 +95,17 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
     }
   };
   const share = async () => {
-    if (navigator.share) {
-      await navigator.share({ title: `CONNECT post by ${author.displayName}`, text, url: postUrl });
-      return;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `CONNECT post by ${author.displayName}`, text, url: postUrl });
+        return;
+      }
+      await navigator.clipboard.writeText(postUrl);
+      setShareStatus("Link copied.");
+    } catch {
+      await navigator.clipboard?.writeText(postUrl).catch(() => undefined);
+      setShareStatus("Link copied.");
     }
-    await navigator.clipboard.writeText(postUrl);
-    setShareStatus("Link copied.");
   };
   const stop = (event: MouseEvent) => event.stopPropagation();
   const openProfile = (id: string) => {

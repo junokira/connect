@@ -167,7 +167,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   const positionedPosts = useMemo(() => {
     if (mode === "horizontal") {
       const ordered = [...visibleSourcePosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-      return ordered.map((post, index) => ({ post, position: { x: index * 340 - 120, y: -190 } }));
+      return ordered.map((post, index) => ({ post, position: { x: index * 372 - 120, y: -220 } }));
     }
     return resolveCanvasCollisions(visibleSourcePosts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) })));
   }, [feedStyle, mode, visibleSourcePosts]);
@@ -185,14 +185,12 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   useEffect(() => {
     const node = viewportRef.current;
     if (!node || mode === "none") return;
+    if (mode === "horizontal") return;
 
     const handleWheel = (event: globalThis.WheelEvent) => {
       if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
-      }
-      if (mode === "horizontal") {
-        return;
       }
       event.preventDefault();
       updateSize();
@@ -358,7 +356,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     <main
       ref={viewportRef}
       className={`canvas-viewport relative flex-1 overflow-hidden bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white ${mode !== "none" ? "cursor-grab active:cursor-grabbing" : "cursor-default"} ${className}`}
-      style={{ touchAction: mode === "horizontal" ? "pan-y" : mode === "full" ? "none" : "auto" }}
+      style={{ touchAction: mode === "horizontal" ? "pan-y pinch-zoom" : mode === "full" ? "none" : "auto", overscrollBehavior: mode === "horizontal" ? "auto" : "none" }}
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
       onPointerUp={pointerUp}

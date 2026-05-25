@@ -1,4 +1,4 @@
-import { Bookmark, ChevronRight, ExternalLink, Heart, Image as ImageIcon, Link as LinkIcon, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Pin, Repeat2, Trash2, Video, Volume2, VolumeX } from "lucide-react";
+import { Bookmark, ChevronRight, ExternalLink, Heart, Image as ImageIcon, Link as LinkIcon, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Pin, Repeat2, Share2, Trash2, Video, Volume2, VolumeX } from "lucide-react";
 import { CSSProperties, MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Post, User } from "../types";
 import { useAppStore } from "../store/useAppStore";
@@ -107,6 +107,19 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
     setMenuOpen(false);
     handler?.();
   };
+  const sharePost = async () => {
+    const url = `${window.location.origin}?post=${post.id}`;
+    const title = `CONNECT post by ${author.displayName}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text: text || title, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+    } catch {
+      await navigator.clipboard?.writeText(url).catch(() => undefined);
+    }
+  };
 
   useEffect(() => {
     setBrokenMedia(false);
@@ -192,11 +205,13 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
               {post.authorId === currentUserId ? (
                 <>
                   <button onClick={menuAction(onEdit)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-white/10"><Pencil size={15} /> Edit</button>
+                  <button onClick={menuAction(() => void sharePost())} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-white/10"><Share2 size={15} /> Share</button>
                   <button onClick={menuAction(onPinPost)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-white/10"><Pin size={15} /> Pin to center</button>
                   <button onClick={menuAction(onDelete)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-400/10"><Trash2 size={15} /> Delete</button>
                 </>
               ) : (
                 <>
+                  <button onClick={menuAction(() => void sharePost())} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-white/10"><Share2 size={15} /> Share</button>
                   <button onClick={menuAction(onMute)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-white/10">{muted ? <Volume2 size={15} /> : <VolumeX size={15} />} {muted ? "Unmute" : `Mute @${author.username}`}</button>
                   <button onClick={menuAction(onReport)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-400/10"><ExternalLink size={15} /> Report</button>
                 </>
