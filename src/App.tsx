@@ -15,6 +15,16 @@ import { FeedScope, FeedStyle, SortMode } from "./types";
 import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y } from "./utils/canvasLayout";
 import { getFilteredPosts } from "./utils/posts";
 
+// Z-INDEX LAYERS
+// 10  - sticky headers / canvas controls
+// 20  - page-level overlays (ProfileView)
+// 30  - app chrome (header)
+// 50  - drawers / panels (AdjustPanel, Composer)
+// 60  - modals (PostModal)
+// 70  - sub-modals / image viewers
+// 80  - fullscreen takeovers (canvas fullscreen)
+// 90  - system toasts / alerts (future)
+
 const sortOptions: { value: SortMode; label: string }[] = [
   { value: "newest", label: "Newest" },
   { value: "oldest", label: "Oldest" },
@@ -517,6 +527,7 @@ export default function App() {
   const [feedScope, setFeedScope] = useState<FeedScope>("everyone");
   const [canvasRecenterSignal, setCanvasRecenterSignal] = useState(0);
   const [editingPostId, setEditingPostId] = useState<string | undefined>();
+  const [profileCanvasFullscreen, setProfileCanvasFullscreen] = useState(false);
   const refreshTimer = useRef<number | undefined>(undefined);
   const focusedInitialCluster = useRef(false);
 
@@ -717,7 +728,7 @@ export default function App() {
         )}
       </div>
 
-      {!chromeHidden ? (
+      {!chromeHidden && !profileCanvasFullscreen ? (
         <MobileNav
           activeView={activeView}
           unreadCount={unreadNotificationCount}
@@ -801,6 +812,7 @@ export default function App() {
         onMuteUser={(id) => void muteUser(id)}
         onUnmuteUser={(id) => void unmuteUser(id)}
         onReportUser={(id) => void reportUser(id, "other")}
+        onCanvasFullscreenChange={setProfileCanvasFullscreen}
       />
     </div>
   );

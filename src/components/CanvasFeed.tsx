@@ -285,7 +285,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
           event.stopPropagation();
           centerLatest();
         }}
-        className="absolute left-4 top-4 z-20 flex h-11 items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-[#111113]/88"
+        className="absolute left-4 top-4 z-20 flex h-11 items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 dark:border-white/10 dark:bg-[#111113]/88 dark:focus-visible:ring-white"
         aria-label="Jump to latest posts"
       >
         <LocateFixed size={17} />

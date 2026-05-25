@@ -35,6 +35,7 @@ type Props = {
   onMuteUser?: (id: string) => void;
   onUnmuteUser?: (id: string) => void;
   onReportUser?: (id: string) => void;
+  onCanvasFullscreenChange?: (fullscreen: boolean) => void;
 };
 
 type ProfileTab = "Canvas" | "Posts" | "Media" | "Likes" | "Saved" | "Reposts";
@@ -409,7 +410,7 @@ function FullscreenMedia({ src, label, shape, onClose }: { src: string; label: s
   );
 }
 
-export function ProfileView({ user, currentUserId, currentUserEmail, verificationStatus, verificationReason, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onBlockUser, onUnblockUser, onMuteUser, onUnmuteUser, onReportUser }: Props) {
+export function ProfileView({ user, currentUserId, currentUserEmail, verificationStatus, verificationReason, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onBlockUser, onUnblockUser, onMuteUser, onUnmuteUser, onReportUser, onCanvasFullscreenChange }: Props) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("Canvas");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
@@ -423,11 +424,33 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !canvasFullscreen) onClose();
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  }, [canvasFullscreen, onClose]);
+
+  useEffect(() => {
+    if (!canvasFullscreen) return undefined;
+    const closeFullscreenOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCanvasFullscreen(false);
+    };
+    window.addEventListener("keydown", closeFullscreenOnEscape);
+    return () => window.removeEventListener("keydown", closeFullscreenOnEscape);
+  }, [canvasFullscreen]);
+
+  useEffect(() => {
+    onCanvasFullscreenChange?.(canvasFullscreen);
+    document.body.classList.toggle("canvas-fs-active", canvasFullscreen);
+    if (!canvasFullscreen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.classList.remove("canvas-fs-active");
+      onCanvasFullscreenChange?.(false);
+    };
+  }, [canvasFullscreen, onCanvasFullscreenChange]);
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0, behavior: "auto" });
@@ -607,18 +630,28 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
 
         <section className="px-4 py-6">
           {activeTab === "Canvas" ? (
-            <div className={canvasFullscreen ? "fixed inset-0 z-[55] overflow-hidden bg-[#f5f5f7] dark:bg-[#050505]" : "relative h-[70vh] min-h-[480px] overflow-hidden rounded-3xl border border-slate-200 shadow-glass dark:border-white/10"}>
-              <button onClick={() => setCanvasFullscreen((value) => !value)} className="absolute right-3 top-3 z-30 flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88" aria-label="Toggle profile canvas fullscreen">
+            <div
+              className={canvasFullscreen ? "fixed inset-0 z-[80] overflow-hidden bg-[#f5f5f7] dark:bg-[#050505]" : "relative h-[70vh] min-h-[480px] overflow-hidden rounded-3xl border border-slate-200 shadow-glass transition-all duration-300 ease-out dark:border-white/10"}
+              style={canvasFullscreen ? { paddingBottom: "env(safe-area-inset-bottom)", paddingTop: "env(safe-area-inset-top)" } : undefined}
+              role={canvasFullscreen ? "dialog" : undefined}
+              aria-modal={canvasFullscreen ? "true" : undefined}
+              aria-label={canvasFullscreen ? "Canvas fullscreen view" : undefined}
+            >
+              {canvasFullscreen ? (
+                <button onClick={() => setCanvasFullscreen(false)} className="pointer-events-auto absolute left-3 top-3 z-[81] grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white/88 text-slate-950 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 dark:text-white" aria-label="Close fullscreen canvas">
+                  <X size={18} />
+                </button>
+              ) : null}
+              <button onClick={() => setCanvasFullscreen((value) => !value)} className="pointer-events-auto absolute right-3 top-3 z-[81] flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88" aria-label={canvasFullscreen ? "Minimize profile canvas" : "Open profile canvas fullscreen"}>
                 {canvasFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 <span>{canvasFullscreen ? "Minimize" : "Open canvas"}</span>
               </button>
-              {canvasFullscreen ? <button onClick={() => setCanvasFullscreen(false)} className="absolute left-3 top-3 z-30 rounded-xl border border-slate-200 bg-white/88 px-3 py-2 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88">Back to profile</button> : null}
               {!canvasFullscreen ? (
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[#f5f5f7] via-[#f5f5f7]/70 to-transparent p-5 text-sm font-semibold text-slate-500 dark:from-[#050505] dark:via-[#050505]/70">
                   Swipe sideways to explore. Open canvas for full pan and zoom.
                 </div>
               ) : null}
-              <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="gallery" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={onOpenPost} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" interactionMode={canvasFullscreen ? "full" : "horizontal"} showControls={canvasFullscreen} />
+              <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="gallery" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={(id) => { setCanvasFullscreen(false); onOpenPost(id); }} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" interactionMode={canvasFullscreen ? "full" : "horizontal"} showControls={canvasFullscreen} />
             </div>
           ) : activeTab === "Media" ? (
             <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-3">
@@ -700,7 +733,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
       {verificationOpen ? <VerificationSheet user={user} isOwnProfile={isOwnProfile} status={verificationStatus} reason={verificationReason} onClose={() => setVerificationOpen(false)} onRequestVerification={onRequestVerification} /> : null}
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
       {networkList ? (
-        <div onMouseDown={() => setNetworkList(undefined)} className="fixed inset-0 z-[75] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+        <div onMouseDown={() => setNetworkList(undefined)} className="fixed inset-0 z-[72] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
           <section onMouseDown={(event) => event.stopPropagation()} className="modal-enter thin-scrollbar max-h-[80dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-lg font-black">{networkList === "followers" ? "Followers" : "Following"}</p>
