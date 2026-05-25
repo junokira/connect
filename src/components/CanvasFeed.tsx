@@ -88,6 +88,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   const mode = interactionMode || (interactive ? "full" : "none");
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
+  const velocityRef = useRef<{ x: number; y: number; time: number; vx: number }>({ x: 0, y: 0, time: 0, vx: 0 });
   const didDragRef = useRef(false);
   const suppressClickRef = useRef(false);
   const centeredStartupRef = useRef("");
@@ -166,16 +167,30 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
 
   const visibleSourcePosts = useMemo(() => posts.filter((post) => !blocks.some((block) => block.blockedId === post.authorId) && !mutes.some((mute) => mute.mutedId === post.authorId)), [blocks, mutes, posts]);
 
-  const positionedPosts = useMemo(
-    () => resolveCanvasCollisions(visibleSourcePosts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) }))),
-    [feedStyle, visibleSourcePosts]
-  );
+  const positionedPosts = useMemo(() => {
+    if (mode === "horizontal") {
+      const ordered = [...visibleSourcePosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      return ordered.map((post, index) => ({ post, position: { x: index * 318 - 160, y: -165 } }));
+    }
+    return resolveCanvasCollisions(visibleSourcePosts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) })));
+  }, [feedStyle, mode, visibleSourcePosts]);
+
+  const clampHorizontalX = useCallback((nextX: number) => {
+    if (mode !== "horizontal" || !positionedPosts.length) return nextX;
+    const minPostX = Math.min(...positionedPosts.map(({ position }) => position.x));
+    const maxPostX = Math.max(...positionedPosts.map(({ position }) => position.x));
+    const leftLimit = -(maxPostX + CANVAS_CARD_WIDTH) + size.width / 2 + 72;
+    const rightLimit = -minPostX - size.width / 2 + 260;
+    if (leftLimit > rightLimit) return (leftLimit + rightLimit) / 2;
+    return Math.max(leftLimit, Math.min(rightLimit, nextX));
+  }, [mode, positionedPosts, size.width]);
 
   const centerLatest = useCallback(() => {
     const latest = [...positionedPosts].sort((a, b) => Date.parse(b.post.createdAt) - Date.parse(a.post.createdAt))[0];
     if (!latest) return;
-    onViewChange({ x: -(latest.position.x + CANVAS_CARD_CENTER_X), y: -(latest.position.y + CANVAS_CARD_CENTER_Y), zoom: 0.95 });
-  }, [onViewChange, positionedPosts]);
+    const nextX = -(latest.position.x + CANVAS_CARD_CENTER_X);
+    onViewChange({ x: mode === "horizontal" ? clampHorizontalX(nextX) : nextX, y: -(latest.position.y + CANVAS_CARD_CENTER_Y), zoom: mode === "horizontal" ? 0.9 : 0.95 });
+  }, [clampHorizontalX, mode, onViewChange, positionedPosts]);
 
   const visiblePosts = useMemo(() => {
     const padding = 640;
@@ -218,6 +233,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     didDragRef.current = false;
     suppressClickRef.current = false;
     dragRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, view: viewRef.current, postId: postElement?.dataset.canvasPostId };
+    velocityRef.current = { x: event.clientX, y: event.clientY, time: performance.now(), vx: 0 };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -229,7 +245,10 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     if (Math.hypot(deltaX, deltaY) > 6) didDragRef.current = true;
     if (mode === "horizontal") {
       if (Math.abs(deltaY) > Math.abs(deltaX) * 1.1) return;
-      scheduleView({ ...viewRef.current, x: drag.view.x + deltaX, y: drag.view.y });
+      const now = performance.now();
+      const elapsed = Math.max(16, now - velocityRef.current.time);
+      velocityRef.current = { x: event.clientX, y: event.clientY, time: now, vx: (event.clientX - velocityRef.current.x) / elapsed };
+      scheduleView({ ...viewRef.current, x: clampHorizontalX(drag.view.x + deltaX), y: drag.view.y });
       return;
     }
     scheduleView({ ...viewRef.current, x: drag.view.x + deltaX, y: drag.view.y + deltaY });
@@ -240,6 +259,10 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     if (drag?.id === event.pointerId && drag.postId && !didDragRef.current) {
       suppressClickRef.current = true;
       onOpenPost(drag.postId);
+    }
+    if (drag?.id === event.pointerId && mode === "horizontal" && didDragRef.current) {
+      const momentum = velocityRef.current.vx * 220;
+      scheduleView({ ...viewRef.current, x: clampHorizontalX(viewRef.current.x + momentum), y: drag.view.y });
     }
     dragRef.current = null;
   };

@@ -353,7 +353,7 @@ function VerificationSheet({ user, isOwnProfile, status, reason, onClose, onRequ
   };
 
   return (
-    <div onMouseDown={onClose} className="fixed inset-0 z-[72] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+    <div onMouseDown={onClose} className="fixed inset-0 z-[76] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
       <section onMouseDown={(event) => event.stopPropagation()} className="modal-enter w-full max-w-md rounded-t-[28px] border border-slate-200 bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))] shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -515,10 +515,10 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
 
   return (
     <div ref={scrollerRef} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter fixed inset-0 z-20 overflow-y-auto bg-[#f5f5f7] pb-24 text-slate-950 dark:bg-[#050505] dark:text-white lg:left-72 lg:pb-0">
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
-        <div>
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
+        <div className="min-w-0">
           <p className="flex items-center gap-1 font-bold">
-            {user.displayName}
+            <span className="truncate">{user.displayName}</span>
             {(user.verified || isOwnProfile) ? (
               <button onClick={() => setVerificationOpen(true)} className="rounded-full text-slate-400 hover:text-[#007aff] dark:text-slate-500 dark:hover:text-[#64d2ff]" aria-label="Open verification details">
                 {user.verified ? <VerifiedBadge verified size={15} /> : <BadgeCheck size={15} strokeWidth={2.4} />}
@@ -527,7 +527,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
           </p>
           <p className="text-sm text-slate-500">{profileData.userPosts.length} posts</p>
         </div>
-        <div className="relative flex items-center gap-1">
+        <div className="relative flex shrink-0 items-center gap-1 rounded-2xl border border-slate-200 bg-white/70 p-1 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/70">
           <button onClick={() => setMenuOpen((open) => !open)} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Profile menu">
             <Menu size={20} />
           </button>
@@ -535,7 +535,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
             <X size={20} />
           </button>
           {menuOpen ? (
-            <div className="absolute right-0 top-12 z-30 w-64 rounded-3xl border border-slate-200 bg-white/95 p-2 text-sm shadow-2xl backdrop-blur dark:border-white/10 dark:bg-slate-950/95">
+            <div className="absolute right-0 top-12 z-[74] w-64 rounded-3xl border border-slate-200 bg-white/95 p-2 text-sm shadow-2xl backdrop-blur dark:border-white/10 dark:bg-slate-950/95">
               <button onClick={() => { setActiveTab("Media"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><ImagePlus size={17} /> Media</button>
               <button onClick={() => { setActiveTab("Reposts"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Repeat2 size={17} /> Reposts</button>
               {isOwnProfile ? (
@@ -655,7 +655,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
                   <X size={18} />
                 </button>
               ) : null}
-              <button
+              {!verificationOpen ? <button
                 onMouseDown={canvasFullscreen ? stopFullscreenControlEvent : undefined}
                 onTouchStart={canvasFullscreen ? stopFullscreenControlEvent : undefined}
                 onClick={(event) => {
@@ -672,7 +672,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
               >
                 {canvasFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 <span>{canvasFullscreen ? "Minimize" : "Open canvas"}</span>
-              </button>
+              </button> : null}
               {!canvasFullscreen ? (
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[#f5f5f7] via-[#f5f5f7]/70 to-transparent p-5 text-sm font-semibold text-slate-500 dark:from-[#050505] dark:via-[#050505]/70">
                   Swipe sideways to explore. Open canvas for full pan and zoom.
@@ -713,11 +713,11 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
                 <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-3xl border-4 border-white bg-slate-100 shadow-2xl dark:border-[#111113] dark:bg-white/10">
                   {user.featuredCoverUrl ? <img className="h-full w-full object-cover" src={user.featuredCoverUrl} alt="" loading="lazy" /> : null}
                 </div>
-                <div className="relative min-w-0 flex-1">
+                <div className="relative min-w-0 flex-1 text-center sm:text-left">
                   <h2 className="text-2xl font-black">{user.featuredTitle || "Current work"}</h2>
                   {user.featuredDescription ? <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">{user.featuredDescription}</p> : null}
                   {featuredUrl ? (
-                    <a href={featuredUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">
+                    <a href={featuredUrl} target="_blank" rel="noreferrer" className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950 sm:mx-0">
                       Open link <LinkIcon size={15} />
                     </a>
                   ) : null}

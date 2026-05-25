@@ -13,6 +13,7 @@ type Props = {
   reposted?: boolean;
   bookmarked?: boolean;
   density?: "compact" | "standard" | "expanded";
+  widthClass?: string;
   currentUserId?: string;
   muted?: boolean;
   onEdit?: () => void;
@@ -29,15 +30,16 @@ type Props = {
   onBookmark: () => void;
 };
 
-export function PostCard({ post, author, emphasized, liked, reposted, bookmarked, density = "standard", currentUserId, muted, onEdit, onDelete, onMute, onReport, onHashtagClick, onPinPost, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
+export function PostCard({ post, author, emphasized, liked, reposted, bookmarked, density = "standard", widthClass, currentUserId, muted, onEdit, onDelete, onMute, onReport, onHashtagClick, onPinPost, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [brokenMedia, setBrokenMedia] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const text = post.type === "text" || post.type === "link" ? post.content : post.caption;
   const embedUrl = getVideoEmbedUrl(post.videoUrl || post.sourceUrl);
   const directVideo = isDirectVideoUrl(post.videoUrl);
   const youtubeThumb = getYoutubeThumbnail(post.videoUrl || post.sourceUrl || "");
   const score = post.likesCount + post.commentsCount * 2 + post.repostsCount * 3;
-  const width = density === "compact" ? "w-[240px]" : density === "expanded" && post.type !== "text" ? "w-[380px]" : post.type === "text" ? "w-[292px]" : "w-[340px]";
+  const width = widthClass || (density === "compact" ? "w-[240px]" : density === "expanded" && post.type !== "text" ? "w-[380px]" : post.type === "text" ? "w-[292px]" : "w-[340px]");
   const heatClass = score >= 500
     ? "viral-glow ring-2 ring-rose-500/80 shadow-[0_0_28px_rgba(239,68,68,0.3)]"
     : score >= 50
@@ -54,6 +56,10 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
     setMenuOpen(false);
     handler?.();
   };
+
+  useEffect(() => {
+    setBrokenMedia(false);
+  }, [post.id, post.imageUrl, post.thumbnailUrl, post.videoUrl, post.sourceThumb, post.sourceUrl]);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -122,13 +128,19 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
         </div>
       </div>
 
-      {post.type === "photo" && post.imageUrl ? <img className={`${density === "compact" ? "h-24 object-cover" : density === "expanded" ? "max-h-96 object-contain" : "max-h-72 object-contain"} w-full bg-slate-100 dark:bg-black`} src={post.imageUrl} alt="" loading="lazy" /> : null}
+      {post.type === "photo" ? (
+        post.imageUrl && !brokenMedia ? (
+          <img onError={() => setBrokenMedia(true)} className={`${density === "compact" ? "h-24 object-cover" : density === "expanded" ? "max-h-96 object-contain" : "max-h-72 object-contain"} w-full bg-slate-100 dark:bg-black`} src={post.imageUrl} alt="" loading="lazy" />
+        ) : (
+          <div className="grid h-48 place-items-center bg-slate-100 px-6 text-center text-sm font-semibold text-slate-500 dark:bg-black dark:text-white/70">Media unavailable. Open post for details.</div>
+        )
+      ) : null}
       {post.type === "video" && (post.thumbnailUrl || post.videoUrl) ? (
         <div className={`relative bg-black ${density === "compact" ? "h-24 overflow-hidden" : "max-h-72"}`}>
-          {post.thumbnailUrl ? (
-            <img className={`${density === "compact" ? "h-full object-cover" : "max-h-72 object-contain"} w-full`} src={post.thumbnailUrl} alt="" loading="lazy" />
+          {post.thumbnailUrl && !brokenMedia ? (
+            <img onError={() => setBrokenMedia(true)} className={`${density === "compact" ? "h-full object-cover" : "max-h-72 object-contain"} w-full`} src={post.thumbnailUrl} alt="" loading="lazy" />
           ) : youtubeThumb ? (
-            <img className={`${density === "compact" ? "h-full object-cover" : "max-h-72 object-cover"} w-full`} src={youtubeThumb} alt="" loading="lazy" />
+            <img onError={() => setBrokenMedia(true)} className={`${density === "compact" ? "h-full object-cover" : "max-h-72 object-cover"} w-full`} src={youtubeThumb} alt="" loading="lazy" />
           ) : directVideo ? (
             <video className={`${density === "compact" ? "h-full object-cover" : "max-h-72 object-contain"} w-full`} src={post.videoUrl} muted preload="metadata" />
           ) : embedUrl ? (
@@ -158,7 +170,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
                 <span className="block text-xs font-bold uppercase text-slate-500">{getPlatformLabel(post.sourcePlatform)}</span>
                 <span className="line-clamp-2 text-sm font-semibold">{post.sourceTitle || post.sourceUrl}</span>
               </span>
-              {post.sourceThumb && !youtubeThumb ? <img className="h-14 w-14 rounded-xl object-cover" src={post.sourceThumb} alt="" loading="lazy" /> : <ChevronRight size={17} />}
+              {post.sourceThumb && !youtubeThumb ? <img onError={() => setBrokenMedia(true)} className="h-14 w-14 rounded-xl object-cover" src={post.sourceThumb} alt="" loading="lazy" /> : <ChevronRight size={17} />}
             </div>
           </div>
         ) : null}

@@ -1,4 +1,4 @@
-import { Apple, Eye, EyeOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, X } from "lucide-react";
+import { Apple, Eye, EyeOff, ImageOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasFeed } from "./components/CanvasFeed";
 import { ActivityView as NotificationsActivityView } from "./components/ActivityView";
@@ -13,6 +13,7 @@ import { supabase } from "./lib/supabase";
 import { useAppStore } from "./store/useAppStore";
 import { FeedScope, FeedStyle, SortMode } from "./types";
 import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y } from "./utils/canvasLayout";
+import { getYoutubeThumbnail } from "./utils/media";
 import { getFilteredPosts } from "./utils/posts";
 
 // Z-INDEX LAYERS
@@ -370,6 +371,22 @@ function SearchView({
   );
 }
 
+function ExploreMediaTile({ post, preview, onOpen }: { post: ReturnType<typeof getFilteredPosts>[number]; preview: string; onOpen: () => void }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <button onClick={onOpen} className="aspect-[4/5] overflow-hidden rounded-2xl bg-slate-100 text-left dark:bg-white/10">
+      {preview && !failed ? (
+        <img onError={() => setFailed(true)} className="h-full w-full object-cover" src={preview} alt="" loading="lazy" />
+      ) : (
+        <span className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center text-xs font-bold text-slate-500 dark:text-slate-300">
+          <ImageOff size={22} />
+          {post.type === "link" ? "Open link" : "Open media"}
+        </span>
+      )}
+    </button>
+  );
+}
+
 function ExploreView({
   posts,
   users,
@@ -392,6 +409,7 @@ function ExploreView({
   const trending = [...posts].sort((a, b) => b.likesCount + b.commentsCount * 2 + b.repostsCount * 3 - (a.likesCount + a.commentsCount * 2 + a.repostsCount * 3)).slice(0, 8);
   const media = posts.filter((post) => post.type !== "text").slice(0, 9);
   const people = users.slice(0, 6);
+  const mediaPreview = (post: ReturnType<typeof getFilteredPosts>[number]) => post.imageUrl || post.thumbnailUrl || post.sourceThumb || getYoutubeThumbnail(post.videoUrl || post.sourceUrl || "");
 
   return (
     <main className="thin-scrollbar h-full overflow-y-auto px-4 pb-28 pt-20 lg:px-8">
@@ -402,13 +420,14 @@ function ExploreView({
         </div>
         <section className="mb-8">
           <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Trending now</h2>
-          <div className="grid justify-items-center gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {trending.map((post) => (
               <PostCard
                 key={post.id}
                 post={post}
                 author={users.find((user) => user.id === post.authorId) || users[0]}
                 emphasized
+                widthClass="w-full"
                 {...reactionState(post.id)}
                 onOpen={() => onOpenPost(post.id)}
                 onProfile={() => onOpenProfile(post.authorId)}
@@ -424,11 +443,10 @@ function ExploreView({
           <div>
             <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Media wall</h2>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              {media.map((post) => (
-                <button key={post.id} onClick={() => onOpenPost(post.id)} className="aspect-[4/5] overflow-hidden rounded-2xl bg-slate-100 text-left dark:bg-white/10">
-                  <img className="h-full w-full object-cover" src={post.imageUrl || post.thumbnailUrl} alt="" />
-                </button>
-              ))}
+              {media.map((post) => {
+                const preview = mediaPreview(post);
+                return <ExploreMediaTile key={post.id} post={post} preview={preview} onOpen={() => onOpenPost(post.id)} />;
+              })}
             </div>
           </div>
           <aside>
@@ -669,7 +687,7 @@ export default function App() {
         />
       ) : null}
       <div className="relative flex min-w-0 flex-1 flex-col">
-        {!profileCanvasFullscreen ? (
+        {!activeProfile && !profileCanvasFullscreen ? (
           <header className={`fixed left-0 right-0 top-0 z-30 flex items-center justify-end gap-3 p-4 ${chromeHidden ? "" : "lg:left-72"}`}>
             {!chromeHidden ? <div className="hidden lg:block"><SearchBox compact onFocus={() => setActiveView("search")} /></div> : null}
             {!chromeHidden && error ? <span className="hidden max-w-72 truncate rounded-2xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:bg-rose-400/10 dark:text-rose-200 lg:block">{error}</span> : null}
@@ -724,6 +742,7 @@ export default function App() {
       {!chromeHidden && !profileCanvasFullscreen ? (
         <MobileNav
           activeView={activeView}
+          profileActive={Boolean(activeProfile)}
           unreadCount={unreadNotificationCount}
           onHome={recenterCanvas}
           onExplore={openExplore}
