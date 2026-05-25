@@ -410,12 +410,13 @@ function FullscreenMedia({ src, label, shape, onClose }: { src: string; label: s
   );
 }
 
-export function ProfileView({ user, currentUserId, currentUserEmail, verificationStatus, verificationReason, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onBlockUser, onUnblockUser, onMuteUser, onUnmuteUser, onReportUser, onCanvasFullscreenChange }: Props) {
+export function ProfileView({ user, currentUserId, currentUserEmail, verificationStatus, verificationReason, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onBlockUser, onUnblockUser, onReportUser, onCanvasFullscreenChange }: Props) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("Canvas");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
   const [networkList, setNetworkList] = useState<"followers" | "following" | undefined>();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [safetyMenuOpen, setSafetyMenuOpen] = useState(false);
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
   const [profileCanvasView, setProfileCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.95 });
@@ -477,7 +478,6 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   const isOwnProfile = user.id === currentUserId;
   const isFollowing = follows.some((follow) => follow.followerId === currentUserId && follow.followingId === user.id);
   const isBlocked = blocks.some((block) => block.blockedId === user.id);
-  const isMuted = mutes.some((mute) => mute.mutedId === user.id);
   const reactionState = (postId: string) => ({
     liked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "like"),
     reposted: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "repost"),
@@ -528,7 +528,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
           <p className="text-sm text-slate-500">{profileData.userPosts.length} posts</p>
         </div>
         <div className="relative flex shrink-0 items-center gap-1 rounded-2xl border border-slate-200 bg-white/70 p-1 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/70">
-          <button onClick={() => setMenuOpen((open) => !open)} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Profile menu">
+          <button onClick={() => { setSafetyMenuOpen(false); setMenuOpen((open) => !open); }} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Profile menu">
             <Menu size={20} />
           </button>
           <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close profile">
@@ -570,12 +570,11 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
               )}
               {!isOwnProfile ? (
                 <div className="relative">
-                  <button onClick={() => setMenuOpen((open) => !open)} className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" aria-label="Profile safety menu"><Shield size={17} /></button>
-                  {menuOpen ? (
+                  <button onClick={() => { setMenuOpen(false); setSafetyMenuOpen((open) => !open); }} className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" aria-label="Profile safety menu"><Shield size={17} /></button>
+                  {safetyMenuOpen ? (
                     <div className="absolute right-0 top-12 z-40 w-52 rounded-2xl border border-slate-200 bg-white p-2 text-sm shadow-2xl dark:border-white/10 dark:bg-slate-950">
-                      <button onClick={() => { (isMuted ? onUnmuteUser : onMuteUser)?.(user.id); setMenuOpen(false); }} className="w-full rounded-xl px-3 py-2 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10">{isMuted ? "Unmute" : `Mute @${user.username}`}</button>
-                      <button onClick={() => { (isBlocked ? onUnblockUser : onBlockUser)?.(user.id); setMenuOpen(false); }} className="w-full rounded-xl px-3 py-2 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10">{isBlocked ? "Unblock" : `Block @${user.username}`}</button>
-                      <button onClick={() => { onReportUser?.(user.id); setMenuOpen(false); }} className="w-full rounded-xl px-3 py-2 text-left font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-400/10">Report user</button>
+                      <button onClick={() => { (isBlocked ? onUnblockUser : onBlockUser)?.(user.id); setSafetyMenuOpen(false); }} className="w-full rounded-xl px-3 py-2 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10">{isBlocked ? "Unblock" : `Block @${user.username}`}</button>
+                      <button onClick={() => { onReportUser?.(user.id); setSafetyMenuOpen(false); }} className="w-full rounded-xl px-3 py-2 text-left font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-400/10">Report user</button>
                     </div>
                   ) : null}
                 </div>

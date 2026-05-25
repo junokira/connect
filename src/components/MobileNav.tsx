@@ -68,6 +68,7 @@ export function MobileNav({ activeView, profileActive = false, unreadCount, onHo
     setDragIndex(undefined);
     if (!drag || drag.pointerId !== event.pointerId || !drag.moved) return;
     const nextIndex = indexFromPointer(event.clientX);
+    vibrate();
     suppressClickRef.current = true;
     window.setTimeout(() => {
       suppressClickRef.current = false;
@@ -93,7 +94,7 @@ export function MobileNav({ activeView, profileActive = false, unreadCount, onHo
     >
       <span
         className="pointer-events-none absolute top-2 h-11 w-11 rounded-2xl bg-slate-950 shadow-lg transition-all duration-300 ease-out dark:bg-white"
-        style={{ left: `calc(${visualIndex * 20 + 10}% - 22px)`, opacity: activeView === "search" && !profileActive ? 0 : 1, transitionDuration: dragIndex === undefined ? "300ms" : "80ms" }}
+        style={{ left: `calc(12px + ((100% - 24px) * ${visualIndex + 0.5} / 5) - 22px)`, opacity: activeView === "search" && !profileActive ? 0 : 1, transitionDuration: dragIndex === undefined ? "300ms" : "80ms" }}
       />
       <button onClick={tap(onHome)} className={buttonClass(activeView === "canvas" && !profileActive)} aria-label="Canvas">
         <Home size={21} />

@@ -89,11 +89,13 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
   const velocityRef = useRef<{ x: number; y: number; time: number; vx: number }>({ x: 0, y: 0, time: 0, vx: 0 });
+  const panVelocityRef = useRef<{ x: number; y: number; time: number; vx: number; vy: number }>({ x: 0, y: 0, time: 0, vx: 0, vy: 0 });
   const didDragRef = useRef(false);
   const suppressClickRef = useRef(false);
   const centeredStartupRef = useRef("");
   const viewRef = useRef(view);
   const frameRef = useRef<number | null>(null);
+  const animationRef = useRef<number | null>(null);
   const queuedViewRef = useRef<CanvasView | null>(null);
   const [size, setSize] = useState({ width: 1400, height: 900 });
   const touchRef = useRef<{ distance: number; zoom: number } | null>(null);
@@ -111,6 +113,30 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     });
   }, [onViewChange]);
 
+  const animateView = useCallback((target: CanvasView, duration = 420) => {
+    if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
+    const start = viewRef.current;
+    const startTime = performance.now();
+    const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startTime) / duration);
+      const eased = easeOut(progress);
+      const next = {
+        x: start.x + (target.x - start.x) * eased,
+        y: start.y + (target.y - start.y) * eased,
+        zoom: start.zoom + (target.zoom - start.zoom) * eased
+      };
+      scheduleView(next);
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(tick);
+      } else {
+        animationRef.current = null;
+        scheduleView(target);
+      }
+    };
+    animationRef.current = requestAnimationFrame(tick);
+  }, [scheduleView]);
+
   const updateSize = useCallback(() => {
     const rect = viewportRef.current?.getBoundingClientRect();
     if (rect?.width && rect.height) setSize({ width: rect.width, height: rect.height });
@@ -126,6 +152,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     return () => {
       cancelAnimationFrame(firstFrame);
       cancelAnimationFrame(secondFrame);
+      if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
       observer?.disconnect();
     };
   }, [updateSize]);
@@ -134,16 +161,40 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     viewRef.current = view;
   }, [view]);
 
+  const visibleSourcePosts = useMemo(() => posts.filter((post) => !blocks.some((block) => block.blockedId === post.authorId) && !mutes.some((mute) => mute.mutedId === post.authorId)), [blocks, mutes, posts]);
+
+  const positionedPosts = useMemo(() => {
+    if (mode === "horizontal") {
+      const ordered = [...visibleSourcePosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      return ordered.map((post, index) => ({ post, position: { x: index * 340 - 120, y: -190 } }));
+    }
+    return resolveCanvasCollisions(visibleSourcePosts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) })));
+  }, [feedStyle, mode, visibleSourcePosts]);
+
+  const clampHorizontalX = useCallback((nextX: number) => {
+    if (mode !== "horizontal" || !positionedPosts.length) return nextX;
+    const minPostX = Math.min(...positionedPosts.map(({ position }) => position.x));
+    const maxPostX = Math.max(...positionedPosts.map(({ position }) => position.x));
+    const leftLimit = -(maxPostX + CANVAS_CARD_WIDTH) + size.width / 2 + 72;
+    const rightLimit = -minPostX - size.width / 2 + 260;
+    if (leftLimit > rightLimit) return (leftLimit + rightLimit) / 2;
+    return Math.max(leftLimit, Math.min(rightLimit, nextX));
+  }, [mode, positionedPosts, size.width]);
+
   useEffect(() => {
     const node = viewportRef.current;
     if (!node || mode === "none") return;
 
     const handleWheel = (event: globalThis.WheelEvent) => {
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
       if (mode === "horizontal") {
         const horizontalDelta = Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.shiftKey ? event.deltaY : 0;
         if (!horizontalDelta) return;
         event.preventDefault();
-        scheduleView({ ...viewRef.current, x: viewRef.current.x - horizontalDelta });
+        scheduleView({ ...viewRef.current, x: clampHorizontalX(viewRef.current.x - horizontalDelta * 1.08) });
         return;
       }
       event.preventDefault();
@@ -163,34 +214,14 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
 
     node.addEventListener("wheel", handleWheel, { passive: false });
     return () => node.removeEventListener("wheel", handleWheel);
-  }, [mode, scheduleView, updateSize]);
-
-  const visibleSourcePosts = useMemo(() => posts.filter((post) => !blocks.some((block) => block.blockedId === post.authorId) && !mutes.some((mute) => mute.mutedId === post.authorId)), [blocks, mutes, posts]);
-
-  const positionedPosts = useMemo(() => {
-    if (mode === "horizontal") {
-      const ordered = [...visibleSourcePosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-      return ordered.map((post, index) => ({ post, position: { x: index * 318 - 160, y: -165 } }));
-    }
-    return resolveCanvasCollisions(visibleSourcePosts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) })));
-  }, [feedStyle, mode, visibleSourcePosts]);
-
-  const clampHorizontalX = useCallback((nextX: number) => {
-    if (mode !== "horizontal" || !positionedPosts.length) return nextX;
-    const minPostX = Math.min(...positionedPosts.map(({ position }) => position.x));
-    const maxPostX = Math.max(...positionedPosts.map(({ position }) => position.x));
-    const leftLimit = -(maxPostX + CANVAS_CARD_WIDTH) + size.width / 2 + 72;
-    const rightLimit = -minPostX - size.width / 2 + 260;
-    if (leftLimit > rightLimit) return (leftLimit + rightLimit) / 2;
-    return Math.max(leftLimit, Math.min(rightLimit, nextX));
-  }, [mode, positionedPosts, size.width]);
+  }, [clampHorizontalX, mode, scheduleView, updateSize]);
 
   const centerLatest = useCallback(() => {
     const latest = [...positionedPosts].sort((a, b) => Date.parse(b.post.createdAt) - Date.parse(a.post.createdAt))[0];
     if (!latest) return;
     const nextX = -(latest.position.x + CANVAS_CARD_CENTER_X);
-    onViewChange({ x: mode === "horizontal" ? clampHorizontalX(nextX) : nextX, y: -(latest.position.y + CANVAS_CARD_CENTER_Y), zoom: mode === "horizontal" ? 0.9 : 0.95 });
-  }, [clampHorizontalX, mode, onViewChange, positionedPosts]);
+    animateView({ x: mode === "horizontal" ? clampHorizontalX(nextX) : nextX, y: -(latest.position.y + CANVAS_CARD_CENTER_Y), zoom: mode === "horizontal" ? 0.9 : 1.05 }, mode === "horizontal" ? 360 : 520);
+  }, [animateView, clampHorizontalX, mode, positionedPosts]);
 
   const visiblePosts = useMemo(() => {
     const padding = 640;
@@ -228,12 +259,17 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     event.stopPropagation();
     if (mode === "none") return;
     if ((event.target as HTMLElement).closest("button,input,select,textarea,a,video")) return;
+    if (animationRef.current !== null) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
     const postElement = (event.target as HTMLElement).closest<HTMLElement>("[data-canvas-post-id]");
     updateSize();
     didDragRef.current = false;
     suppressClickRef.current = false;
     dragRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, view: viewRef.current, postId: postElement?.dataset.canvasPostId };
     velocityRef.current = { x: event.clientX, y: event.clientY, time: performance.now(), vx: 0 };
+    panVelocityRef.current = { x: event.clientX, y: event.clientY, time: performance.now(), vx: 0, vy: 0 };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -251,6 +287,9 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
       scheduleView({ ...viewRef.current, x: clampHorizontalX(drag.view.x + deltaX), y: drag.view.y });
       return;
     }
+    const now = performance.now();
+    const elapsed = Math.max(16, now - panVelocityRef.current.time);
+    panVelocityRef.current = { x: event.clientX, y: event.clientY, time: now, vx: (event.clientX - panVelocityRef.current.x) / elapsed, vy: (event.clientY - panVelocityRef.current.y) / elapsed };
     scheduleView({ ...viewRef.current, x: drag.view.x + deltaX, y: drag.view.y + deltaY });
   };
 
@@ -261,8 +300,12 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
       onOpenPost(drag.postId);
     }
     if (drag?.id === event.pointerId && mode === "horizontal" && didDragRef.current) {
-      const momentum = velocityRef.current.vx * 220;
-      scheduleView({ ...viewRef.current, x: clampHorizontalX(viewRef.current.x + momentum), y: drag.view.y });
+      const momentum = velocityRef.current.vx * 260;
+      animateView({ ...viewRef.current, x: clampHorizontalX(viewRef.current.x + momentum), y: drag.view.y }, 360);
+    } else if (drag?.id === event.pointerId && mode === "full" && didDragRef.current) {
+      const momentumX = panVelocityRef.current.vx * 260;
+      const momentumY = panVelocityRef.current.vy * 260;
+      animateView({ ...viewRef.current, x: viewRef.current.x + momentumX, y: viewRef.current.y + momentumY }, 420);
     }
     dragRef.current = null;
   };
@@ -272,13 +315,27 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     event.stopPropagation();
     if (event.touches.length !== 2) return;
     event.preventDefault();
+    if (animationRef.current !== null) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
     const [a, b] = [event.touches[0], event.touches[1]];
     const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const midpointX = (a.clientX + b.clientX) / 2 - rect.left;
+    const midpointY = (a.clientY + b.clientY) / 2 - rect.top;
+    const current = viewRef.current;
     if (!touchRef.current) {
-      touchRef.current = { distance, zoom: view.zoom };
+      touchRef.current = { distance, zoom: current.zoom };
       return;
     }
-    scheduleView({ ...viewRef.current, zoom: clampZoom((distance / touchRef.current.distance) * touchRef.current.zoom) });
+    const nextZoom = clampZoom((distance / touchRef.current.distance) * touchRef.current.zoom);
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const worldX = (midpointX - centerX - current.x) / current.zoom;
+    const worldY = (midpointY - centerY - current.y) / current.zoom;
+    scheduleView({ zoom: nextZoom, x: midpointX - centerX - worldX * nextZoom, y: midpointY - centerY - worldY * nextZoom });
   };
 
   return (
