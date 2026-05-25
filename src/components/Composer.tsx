@@ -1,5 +1,5 @@
 import { Image, Link2, Loader2, Send, Upload, Video, X } from "lucide-react";
-import { ClipboardEvent, FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
+import { ClipboardEvent, FormEvent, MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { OGPreview, PostType, User } from "../types";
 import { fetchOGPreview } from "../lib/supabaseData";
 import { getVideoEmbedUrl, isDirectVideoUrl, normalizeExternalUrl } from "../utils/media";
@@ -10,6 +10,18 @@ type Props = {
   onClose: () => void;
   onPublish: (draft: { type: PostType; content: string; caption: string; imageUrl?: string; videoUrl?: string; thumbnailUrl?: string; mediaFile?: File; thumbnailFile?: File; sourceUrl?: string; sourcePlatform?: OGPreview["platform"]; sourceTitle?: string; sourceThumb?: string }) => void | Promise<unknown>;
 };
+
+type SavedDraft = {
+  type: PostType;
+  content: string;
+  caption: string;
+  imageUrl: string;
+  videoUrl: string;
+  thumbnailUrl: string;
+  sourceUrl: string;
+};
+
+const draftKey = "connect_draft";
 
 export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   const [type, setType] = useState<PostType>("text");
@@ -29,12 +41,45 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   const [previewAspect, setPreviewAspect] = useState<"natural" | "square" | "portrait" | "wide">("natural");
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
+  const [savedDraft, setSavedDraft] = useState<SavedDraft | undefined>();
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const preview = useMemo(() => (type === "text" || type === "link" ? content : caption), [caption, content, type]);
   const normalizedVideoUrl = type === "video" && videoUrl.trim() ? normalizeExternalUrl(videoUrl) : "";
   const videoEmbedUrl = getVideoEmbedUrl(normalizedVideoUrl);
   const hasMedia = type === "photo" ? Boolean(mediaFile || imageUrl.trim()) : type === "video" ? Boolean(mediaFile || videoUrl.trim()) : true;
   const canPublish = type === "link" ? Boolean(content.trim() && sourceUrl.trim()) : type === "text" ? Boolean(content.trim()) : hasMedia;
+  const hasDraftContent = Boolean(content.trim() || caption.trim() || imageUrl.trim() || videoUrl.trim() || thumbnailUrl.trim() || sourceUrl.trim() || mediaFile || thumbnailFile || ogPreview);
+  const requestClose = useCallback(() => {
+    if (hasDraftContent && !confirmDiscard) {
+      setConfirmDiscard(true);
+      return;
+    }
+    setConfirmDiscard(false);
+    onClose();
+  }, [confirmDiscard, hasDraftContent, onClose]);
+  const discardAndClose = () => {
+    localStorage.removeItem(draftKey);
+    setConfirmDiscard(false);
+    setSavedDraft(undefined);
+    onClose();
+  };
+  const resumeDraft = () => {
+    if (!savedDraft) return;
+    setType(savedDraft.type);
+    setContent(savedDraft.content);
+    setCaption(savedDraft.caption);
+    setImageUrl(savedDraft.imageUrl);
+    setVideoUrl(savedDraft.videoUrl);
+    setThumbnailUrl(savedDraft.thumbnailUrl);
+    setSourceUrl(savedDraft.sourceUrl);
+    setSavedDraft(undefined);
+    setConfirmDiscard(false);
+  };
+  const discardSavedDraft = () => {
+    localStorage.removeItem(draftKey);
+    setSavedDraft(undefined);
+  };
 
   useEffect(() => {
     if (!mediaFile) {
@@ -59,11 +104,34 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   useEffect(() => {
     if (!open) return undefined;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose, open]);
+  }, [open, requestClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(draftKey) || "null") as SavedDraft | null;
+      if (parsed && (parsed.content || parsed.caption || parsed.imageUrl || parsed.videoUrl || parsed.thumbnailUrl || parsed.sourceUrl)) {
+        setSavedDraft(parsed);
+      }
+    } catch {
+      setSavedDraft(undefined);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const interval = window.setInterval(() => {
+      const draft: SavedDraft = { type, content, caption, imageUrl, videoUrl, thumbnailUrl, sourceUrl };
+      if (draft.content || draft.caption || draft.imageUrl || draft.videoUrl || draft.thumbnailUrl || draft.sourceUrl) {
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+      }
+    }, 2000);
+    return () => window.clearInterval(interval);
+  }, [caption, content, imageUrl, open, sourceUrl, thumbnailUrl, type, videoUrl]);
 
   if (!open) return null;
 
@@ -127,6 +195,7 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
       setOgPreview(undefined);
       setMediaFile(undefined);
       setThumbnailFile(undefined);
+      localStorage.removeItem(draftKey);
       onClose();
     } catch (publishError) {
       setError(publishError instanceof Error ? publishError.message : "Could not publish this post. Please try again.");
@@ -136,7 +205,7 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   };
 
   return (
-    <div onMouseDown={onClose} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+    <div onMouseDown={requestClose} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
       <form onMouseDown={stop} onPaste={handlePaste} onSubmit={publish} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -146,10 +215,30 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
               <p className="text-sm text-slate-500">@{currentUser.username}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:hover:bg-white/10">
+          <button type="button" onClick={requestClose} className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:hover:bg-white/10">
             Close
           </button>
         </div>
+
+        {savedDraft ? (
+          <div className="mb-4 rounded-2xl border border-teal-200 bg-teal-50 p-3 text-sm dark:border-teal-300/20 dark:bg-teal-400/10">
+            <p className="font-bold text-teal-800 dark:text-teal-100">You have an unsaved draft.</p>
+            <div className="mt-2 flex gap-2">
+              <button type="button" onClick={resumeDraft} className="rounded-full bg-teal-600 px-3 py-1.5 text-xs font-bold text-white">Resume</button>
+              <button type="button" onClick={discardSavedDraft} className="rounded-full border border-teal-300 px-3 py-1.5 text-xs font-bold text-teal-700 dark:border-teal-300/30 dark:text-teal-100">Discard</button>
+            </div>
+          </div>
+        ) : null}
+
+        {confirmDiscard ? (
+          <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-300/20 dark:bg-amber-400/10">
+            <p className="font-bold text-amber-900 dark:text-amber-100">Discard this draft?</p>
+            <div className="mt-2 flex gap-2">
+              <button type="button" onClick={() => setConfirmDiscard(false)} className="rounded-full bg-slate-950 px-3 py-1.5 text-xs font-bold text-white dark:bg-white dark:text-slate-950">Keep editing</button>
+              <button type="button" onClick={discardAndClose} className="rounded-full border border-amber-300 px-3 py-1.5 text-xs font-bold text-amber-800 dark:border-amber-300/30 dark:text-amber-100">Discard</button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mb-4 grid grid-cols-4 gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-white/10">
           {(["text", "photo", "video", "link"] as PostType[]).map((option) => (

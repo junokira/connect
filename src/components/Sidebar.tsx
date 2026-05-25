@@ -23,6 +23,7 @@ type Props = {
 };
 
 export function Sidebar({ currentUser, activeView, unreadCount, onHome, onExplore, onActivity, onCreate, onProfile, onSignOut }: Props) {
+  const streakLabel = currentUser.postStreak >= 30 ? "Legendary" : currentUser.postStreak >= 7 ? "Blazing" : "On Fire";
   return (
     <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/82 p-5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/82 lg:block">
       <div className="mb-8">
@@ -67,6 +68,12 @@ export function Sidebar({ currentUser, activeView, unreadCount, onHome, onExplor
           <span className="block truncate text-xs text-slate-500">@{currentUser.username}</span>
         </span>
       </button>
+      {currentUser.postStreak >= 3 ? (
+        <button onClick={onProfile} className={`mt-2 flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm font-black text-white streak-badge ${currentUser.postStreak >= 7 ? "streak-badge-hot" : ""}`}>
+          <span>{currentUser.postStreak >= 30 ? "⚡" : currentUser.postStreak >= 7 ? "🔥🔥" : "🔥"} {streakLabel}</span>
+          <span>{currentUser.postStreak} days</span>
+        </button>
+      ) : null}
       <button onClick={onSignOut} className="mt-3 w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10">
         Sign out
       </button>

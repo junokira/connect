@@ -31,6 +31,19 @@ select {
   font: inherit;
 }
 
+button {
+  transition:
+    transform 75ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
 img,
 video {
   -webkit-user-drag: none;
@@ -132,6 +145,36 @@ video {
   animation: like-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+@keyframes float-up {
+  0% { opacity: 0; transform: translateY(8px) scale(0.82); }
+  18% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-34px) scale(1.08); }
+}
+
+.float-up {
+  animation: float-up 800ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes like-bounce {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.45); }
+  100% { transform: scale(1); }
+}
+
+.like-bounce {
+  animation: like-bounce 340ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes ring-upgrade-flash {
+  0% { box-shadow: 0 0 0 rgba(10, 132, 255, 0); }
+  45% { box-shadow: 0 0 0 8px rgba(10, 132, 255, 0.18), 0 0 32px rgba(10, 132, 255, 0.24); }
+  100% { box-shadow: 0 0 0 rgba(10, 132, 255, 0); }
+}
+
+.ring-upgrade-flash {
+  animation: ring-upgrade-flash 460ms ease-out;
+}
+
 @keyframes badge-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.15); }
@@ -157,6 +200,37 @@ video {
 
 .viral-glow {
   animation: viral-pulse 2.5s ease-in-out infinite;
+}
+
+.confetti-burst {
+  pointer-events: none;
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 40;
+}
+
+.confetti-burst span {
+  position: absolute;
+  height: 7px;
+  width: 7px;
+  border-radius: 2px;
+  background: var(--color);
+  animation: confetti-fly 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: var(--delay);
+}
+
+@keyframes confetti-fly {
+  0% { opacity: 1; transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) rotate(420deg) scale(0.74); }
+}
+
+.streak-badge {
+  background: linear-gradient(135deg, #f97316, #f43f5e);
+  box-shadow: 0 12px 28px rgba(244, 63, 94, 0.22);
+}
+
+.streak-badge-hot {
+  animation: badge-pulse 2.2s ease-in-out infinite;
 }
 
 .comment-reply {

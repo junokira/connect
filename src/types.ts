@@ -32,6 +32,8 @@ export type User = {
   followersCount: number;
   followingCount: number;
   verified: boolean;
+  postStreak: number;
+  lastPostAt?: string;
 };
 
 export type ProfileUpdate = {

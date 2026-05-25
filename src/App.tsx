@@ -1,4 +1,4 @@
-import { Apple, Eye, EyeOff, ImageOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, X } from "lucide-react";
+import { Apple, Eye, EyeOff, ImageOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, Volume2, VolumeX, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasFeed } from "./components/CanvasFeed";
 import { ActivityView as NotificationsActivityView } from "./components/ActivityView";
@@ -498,6 +498,7 @@ export default function App() {
     search,
     canvasView,
     theme,
+    soundEnabled,
     createPost,
     setActivePost,
     setActiveProfile,
@@ -524,7 +525,8 @@ export default function App() {
     updateEmail,
     requestVerification,
     signOut,
-    toggleTheme
+    toggleTheme,
+    toggleSound
   } = useAppStore();
   const initialize = useAppStore((state) => state.initialize);
   const refreshData = useAppStore((state) => state.refreshData);
@@ -696,6 +698,9 @@ export default function App() {
             </button> : null}
             {!chromeHidden ? <button onClick={() => setAdjustOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Adjust canvas">
               <SlidersHorizontal size={18} />
+            </button> : null}
+            {!chromeHidden ? <button onClick={toggleSound} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label={soundEnabled ? "Disable CONNECT sounds" : "Enable CONNECT sounds"}>
+              {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
             </button> : null}
             {chromeHidden ? (
               <button onClick={() => setChromeHidden(false)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Show interface">

@@ -1,6 +1,9 @@
-import { Bookmark, ChevronRight, ExternalLink, Heart, Link as LinkIcon, MessageCircle, MoreHorizontal, Pencil, Pin, Repeat2, Trash2, Video, Volume2, VolumeX } from "lucide-react";
-import { MouseEvent, useEffect, useRef, useState } from "react";
+import { Bookmark, ChevronRight, ExternalLink, Heart, Image as ImageIcon, Link as LinkIcon, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Pin, Repeat2, Trash2, Video, Volume2, VolumeX } from "lucide-react";
+import { CSSProperties, MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Post, User } from "../types";
+import { useAppStore } from "../store/useAppStore";
+import { playBookmark, playLike, playRepost } from "../utils/audio";
+import { authorColor } from "../utils/identity";
 import { getPlatformLabel, getVideoEmbedUrl, getYoutubeThumbnail, isDirectVideoUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
 import { VerifiedBadge } from "./VerifiedBadge";
@@ -30,15 +33,31 @@ type Props = {
   onBookmark: () => void;
 };
 
+const heatTier = (score: number) => (score >= 500 ? 3 : score >= 50 ? 2 : score >= 10 ? 1 : 0);
+const confettiColors = ["#ff375f", "#ff9f0a", "#30d158", "#0a84ff", "#bf5af2", "#ffd60a"];
+const postTypeIcon = {
+  text: MessageSquare,
+  photo: ImageIcon,
+  video: Video,
+  link: ExternalLink
+};
+
 export function PostCard({ post, author, emphasized, liked, reposted, bookmarked, density = "standard", widthClass, currentUserId, muted, onEdit, onDelete, onMute, onReport, onHashtagClick, onPinPost, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [brokenMedia, setBrokenMedia] = useState(false);
+  const [delta, setDelta] = useState<"" | "+1" | "-1">("");
+  const [pulseAction, setPulseAction] = useState<"like" | "repost" | "bookmark" | "">("");
+  const [ringFlash, setRingFlash] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const prevScoreRef = useRef(post.likesCount + post.commentsCount * 2 + post.repostsCount * 3 + post.bookmarksCount);
+  const soundEnabled = useAppStore((state) => state.soundEnabled);
   const text = post.type === "text" || post.type === "link" ? post.content : post.caption;
   const embedUrl = getVideoEmbedUrl(post.videoUrl || post.sourceUrl);
   const directVideo = isDirectVideoUrl(post.videoUrl);
   const youtubeThumb = getYoutubeThumbnail(post.videoUrl || post.sourceUrl || "");
-  const score = post.likesCount + post.commentsCount * 2 + post.repostsCount * 3;
+  const score = post.likesCount + post.commentsCount * 2 + post.repostsCount * 3 + post.bookmarksCount;
+  const TypeIcon = postTypeIcon[post.type];
   const width = widthClass || (density === "compact" ? "w-[240px]" : density === "expanded" && post.type !== "text" ? "w-[380px]" : post.type === "text" ? "w-[292px]" : "w-[340px]");
   const heatClass = score >= 500
     ? "viral-glow ring-2 ring-rose-500/80 shadow-[0_0_28px_rgba(239,68,68,0.3)]"
@@ -47,8 +66,39 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
       : score >= 10
         ? "ring-1 ring-amber-400/40"
         : "";
-  const action = (handler: () => void) => (event: MouseEvent<HTMLButtonElement>) => {
+  const confettiPieces = useMemo(() => Array.from({ length: 24 }, (_, index) => {
+    const angle = (index / 24) * Math.PI * 2;
+    const dist = 72 + (index % 6) * 12;
+    return {
+      x: Math.cos(angle) * dist,
+      y: Math.sin(angle) * dist,
+      color: confettiColors[index % confettiColors.length],
+      delay: `${(index % 5) * 26}ms`
+    };
+  }), []);
+  const haptic = (pattern: number | number[]) => {
+    if ("vibrate" in navigator) navigator.vibrate?.(pattern);
+  };
+  const action = (handler: () => void, actionName?: "like" | "repost" | "bookmark", wasActive?: boolean) => (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
+    if (actionName) {
+      setPulseAction(actionName);
+      window.setTimeout(() => setPulseAction(""), 360);
+      if (actionName === "like") {
+        setDelta(wasActive ? "-1" : "+1");
+        haptic(8);
+        if (soundEnabled) playLike();
+      }
+      if (actionName === "repost") {
+        haptic([4, 20, 4]);
+        if (soundEnabled) playRepost();
+      }
+      if (actionName === "bookmark") {
+        haptic(6);
+        if (soundEnabled) playBookmark();
+      }
+      window.setTimeout(() => setDelta(""), 820);
+    }
     handler();
   };
   const menuAction = (handler?: () => void) => (event: MouseEvent<HTMLButtonElement>) => {
@@ -77,15 +127,42 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    const previous = prevScoreRef.current;
+    if (heatTier(previous) < heatTier(score)) {
+      setRingFlash(true);
+      window.setTimeout(() => setRingFlash(false), 500);
+    }
+    if (previous < 500 && score >= 500) {
+      const key = "connect_confetti_triggered";
+      const triggered = new Set(JSON.parse(sessionStorage.getItem(key) || "[]") as string[]);
+      if (!triggered.has(post.id)) {
+        triggered.add(post.id);
+        sessionStorage.setItem(key, JSON.stringify([...triggered]));
+        setShowConfetti(true);
+        window.setTimeout(() => setShowConfetti(false), 1800);
+      }
+    }
+    prevScoreRef.current = score;
+  }, [post.id, score]);
+
   return (
     <article
       data-canvas-post-id={post.id}
       draggable={false}
-      className={`group ${width} ${heatClass} overflow-hidden rounded-2xl border bg-white/92 text-slate-950 shadow-glass backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-2xl dark:border-white/10 dark:bg-[#111113]/90 dark:text-slate-50 ${
+      className={`group relative ${width} ${heatClass} ${ringFlash ? "ring-upgrade-flash" : ""} overflow-hidden rounded-2xl border bg-white/92 text-slate-950 shadow-glass backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-2xl dark:border-white/10 dark:bg-[#111113]/90 dark:text-slate-50 ${
         emphasized ? "ring-2 ring-[#0a84ff]" : "border-[#d2d2d7]"
       }`}
       onClick={onOpen}
     >
+      <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-l-2xl" style={{ background: authorColor(author.id) }} />
+      {showConfetti ? (
+        <div className="confetti-burst" aria-hidden="true">
+          {confettiPieces.map((piece, index) => (
+            <span key={index} style={{ "--x": `${piece.x}px`, "--y": `${piece.y}px`, "--color": piece.color, "--delay": piece.delay } as CSSProperties} />
+          ))}
+        </div>
+      ) : null}
       <div className="flex items-center gap-3 border-b border-slate-200/70 px-4 py-3 dark:border-white/10">
         <button
           className="shrink-0"
@@ -104,7 +181,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
           </p>
           <p className="truncate text-xs text-slate-500 dark:text-slate-400">@{author.username} · {formatDate(post.createdAt)}</p>
         </div>
-        <span className="ml-auto rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium uppercase text-slate-600 dark:bg-white/10 dark:text-slate-300">{post.type}</span>
+        <span className="ml-auto flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium uppercase text-slate-600 dark:bg-white/10 dark:text-slate-300"><TypeIcon size={12} /> {post.type}</span>
         <div ref={menuRef} className="relative">
           <button type="button" onClick={(event) => { event.stopPropagation(); setMenuOpen((open) => !open); }} className="grid h-8 w-8 place-items-center rounded-xl opacity-100 hover:bg-slate-100 dark:hover:bg-white/10 sm:opacity-0 sm:group-hover:opacity-100" aria-label="Post options">
             <MoreHorizontal size={17} />
@@ -182,16 +259,17 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
           ))}
         </div>
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <button onClick={action(onLike)} className={`flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10 ${liked ? "text-rose-600" : ""}`} aria-label="Like post">
+          <button onClick={action(onLike, "like", liked)} className={`relative flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10 ${liked ? "text-rose-600" : ""} ${pulseAction === "like" ? "like-bounce" : ""}`} aria-label="Like post">
             <Heart size={14} fill={liked ? "currentColor" : "none"} /> {formatCount(post.likesCount)}
+            {delta ? <span className="float-up pointer-events-none absolute -top-4 right-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white shadow-lg">{delta}</span> : null}
           </button>
           <button onClick={action(onComment)} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-sky-400/10" aria-label="Comment on post">
             <MessageCircle size={14} /> {formatCount(post.commentsCount)}
           </button>
-          <button onClick={action(onRepost)} className={`flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-400/10 ${reposted ? "text-emerald-600" : ""}`} aria-label="Repost">
+          <button onClick={action(onRepost, "repost", reposted)} className={`flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-400/10 ${reposted ? "text-emerald-600" : ""} ${pulseAction === "repost" ? "like-bounce" : ""}`} aria-label="Repost">
             <Repeat2 size={14} /> {formatCount(post.repostsCount)}
           </button>
-          <button onClick={action(onBookmark)} className={`flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-400/10 ${bookmarked ? "text-amber-600" : ""}`} aria-label="Bookmark post">
+          <button onClick={action(onBookmark, "bookmark", bookmarked)} className={`flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-400/10 ${bookmarked ? "text-amber-600" : ""} ${pulseAction === "bookmark" ? "like-bounce" : ""}`} aria-label="Bookmark post">
             <Bookmark size={14} fill={bookmarked ? "currentColor" : "none"} /> {formatCount(post.bookmarksCount)}
           </button>
         </div>

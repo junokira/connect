@@ -19,6 +19,8 @@ type ProfileRow = {
   followers_count: number;
   following_count: number;
   verified?: boolean | null;
+  post_streak?: number | null;
+  last_post_at?: string | null;
 };
 
 export const DEFAULT_AVATAR_URL =
@@ -123,7 +125,9 @@ const toUser = (row: ProfileRow): User => ({
   createdAt: row.created_at,
   followersCount: row.followers_count,
   followingCount: row.following_count,
-  verified: Boolean(row.verified) || Date.parse(row.created_at) < legacyVerifiedCutoff
+  verified: Boolean(row.verified) || Date.parse(row.created_at) < legacyVerifiedCutoff,
+  postStreak: row.post_streak ?? 0,
+  lastPostAt: row.last_post_at || undefined
 });
 
 const toPost = (row: PostRow): Post => ({

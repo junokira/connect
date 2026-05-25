@@ -38,6 +38,7 @@ import {
   uploadMediaReal
 } from "../lib/supabaseData";
 import { CanvasView, Comment, CommentReaction, FeedStyle, Follow, Notification, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, SortMode, User, UserBlock, UserMute, VerificationRequestStatus } from "../types";
+import { playPostCreated } from "../utils/audio";
 import { placeNextPost } from "../utils/placement";
 
 type DraftInput = {
@@ -81,6 +82,7 @@ type AppState = {
   search: string;
   canvasView: CanvasView;
   theme: "light" | "dark";
+  soundEnabled: boolean;
   initialize: () => Promise<void>;
   refreshData: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -120,6 +122,7 @@ type AppState = {
   pinPost: (postId: string) => Promise<void>;
   followUser: (id: string) => Promise<void>;
   toggleTheme: () => void;
+  toggleSound: () => void;
 };
 
 const extractHashtags = (value: string) => [...value.matchAll(/#([a-z0-9_]+)/gi)].map((match) => match[1].toLowerCase());
@@ -206,6 +209,7 @@ export const useAppStore = create<AppState>()(
       search: "",
       canvasView: { x: 0, y: 0, zoom: 1 },
       theme: "light",
+      soundEnabled: false,
       initialize: async () => {
         if (!isSupabaseConfigured) {
           set({
@@ -396,6 +400,8 @@ export const useAppStore = create<AppState>()(
           activePostId: savedPost.id,
           canvasView: { x: -savedPost.x, y: -savedPost.y, zoom: 1 }
         });
+        if (get().soundEnabled) playPostCreated();
+        void get().refreshData().catch(() => undefined);
         return savedPost;
       },
       setActivePost: (id) => set({ activePostId: id }),
@@ -653,7 +659,8 @@ export const useAppStore = create<AppState>()(
           });
         }
       },
-      toggleTheme: () => set({ theme: get().theme === "light" ? "dark" : "light" })
+      toggleTheme: () => set({ theme: get().theme === "light" ? "dark" : "light" }),
+      toggleSound: () => set({ soundEnabled: !get().soundEnabled })
     }),
     {
       name: "connect-state",
@@ -663,7 +670,8 @@ export const useAppStore = create<AppState>()(
         feedStyle: state.feedStyle,
         authed: state.authed,
         currentUserId: state.currentUserId,
-        currentUserEmail: state.currentUserEmail
+        currentUserEmail: state.currentUserEmail,
+        soundEnabled: state.soundEnabled
       })
     }
   )

@@ -39,6 +39,8 @@ alter table public.profiles add column if not exists featured_banner_url text no
 alter table public.profiles add column if not exists featured_cover_url text not null default '';
 alter table public.profiles add column if not exists is_admin boolean not null default false;
 alter table public.profiles add column if not exists banned boolean not null default false;
+alter table public.profiles add column if not exists post_streak integer not null default 0;
+alter table public.profiles add column if not exists last_post_at timestamptz;
 alter table public.profiles alter column avatar_url set default public.default_connect_avatar_url();
 
 do $$
@@ -82,6 +84,41 @@ create table if not exists public.posts (
   hashtags text[] not null default '{}',
   pinned boolean not null default false
 );
+
+create or replace function public.update_profile_post_streak()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  previous_post_at timestamptz;
+begin
+  select last_post_at
+  into previous_post_at
+  from public.profiles
+  where id = new.author_id
+  for update;
+
+  update public.profiles
+  set
+    post_streak = case
+      when previous_post_at is null then 1
+      when previous_post_at < now() - interval '48 hours' then 1
+      when previous_post_at <= now() - interval '16 hours' then post_streak + 1
+      else post_streak
+    end,
+    last_post_at = now()
+  where id = new.author_id;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_post_created_update_streak on public.posts;
+create trigger on_post_created_update_streak
+  after insert on public.posts
+  for each row execute procedure public.update_profile_post_streak();
 
 create table if not exists public.comments (
   id uuid primary key default gen_random_uuid(),

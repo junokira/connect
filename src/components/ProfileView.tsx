@@ -478,6 +478,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   const isOwnProfile = user.id === currentUserId;
   const isFollowing = follows.some((follow) => follow.followerId === currentUserId && follow.followingId === user.id);
   const isBlocked = blocks.some((block) => block.blockedId === user.id);
+  const streakLabel = user.postStreak >= 30 ? "Legendary" : user.postStreak >= 7 ? "Blazing" : "On Fire";
   const reactionState = (postId: string) => ({
     liked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "like"),
     reposted: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "repost"),
@@ -598,9 +599,14 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
               <span className="flex items-center gap-1"><CalendarDays size={16} /> Joined {formatDate(user.createdAt)}</span>
             </div>
             {isOwnProfile ? (
-              <div className="mt-3 flex gap-5 text-sm">
+              <div className="mt-3 flex flex-wrap items-center gap-5 text-sm">
                 <button onClick={() => setNetworkList("following")} className="hover:underline"><b>{formatCount(user.followingCount)}</b> Following</button>
                 <button onClick={() => setNetworkList("followers")} className="hover:underline"><b>{formatCount(user.followersCount)}</b> Followers</button>
+                {user.postStreak >= 3 ? (
+                  <span className={`streak-badge ${user.postStreak >= 7 ? "streak-badge-hot" : ""} rounded-full px-3 py-1 text-xs font-black text-white`}>
+                    {user.postStreak >= 30 ? "⚡" : user.postStreak >= 7 ? "🔥🔥" : "🔥"} {user.postStreak} day {streakLabel}
+                  </span>
+                ) : null}
               </div>
             ) : null}
           </div>
