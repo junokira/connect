@@ -96,6 +96,7 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
   };
   const share = async () => {
     try {
+      navigator.vibrate?.(8);
       if (navigator.share) {
         await navigator.share({ title: `CONNECT post by ${author.displayName}`, text, url: postUrl });
         return;

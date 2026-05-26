@@ -3,6 +3,7 @@ import { FormEvent, MouseEvent, TouchEvent, WheelEvent, useEffect, useMemo, useR
 import { CanvasView, Follow, Post, PostReaction, ProfileUpdate, User, UserBlock, UserMute, VerificationRequestStatus } from "../types";
 import { normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
+import { shareProfileCard } from "../utils/shareCard";
 import { CanvasFeed } from "./CanvasFeed";
 import { PostCard } from "./PostCard";
 import { VerifiedBadge } from "./VerifiedBadge";
@@ -417,6 +418,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   const [safetyMenuOpen, setSafetyMenuOpen] = useState(false);
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
+  const [shareCardBusy, setShareCardBusy] = useState(false);
   const [embeddedCanvasView, setEmbeddedCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.95 });
   const [fullscreenCanvasView, setFullscreenCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.95 });
   const embeddedCanvasViewRef = useRef(embeddedCanvasView);
@@ -456,9 +458,13 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   useEffect(() => {
     if (!networkList) return undefined;
     const previousOverflow = document.body.style.overflow;
+    const scroller = scrollerRef.current;
+    const previousScrollerOverflow = scroller?.style.overflow || "";
     document.body.style.overflow = "hidden";
+    if (scroller) scroller.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
+      if (scroller) scroller.style.overflow = previousScrollerOverflow;
     };
   }, [networkList]);
 
@@ -551,7 +557,17 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
     setEmbeddedCanvasView({ x: 0, y: 0, zoom: 0.95 });
   };
   const shareProfile = () => {
+    navigator.vibrate?.(8);
     onShareProfile?.(user);
+  };
+  const shareStoryCard = async () => {
+    try {
+      setShareCardBusy(true);
+      navigator.vibrate?.([6, 18, 6]);
+      await shareProfileCard(user, `${window.location.origin}/u/${encodeURIComponent(user.username)}`);
+    } finally {
+      setShareCardBusy(false);
+    }
   };
   const passPreviewWheelToPage = (event: WheelEvent<HTMLDivElement>) => {
     if (canvasFullscreen) return;
@@ -586,6 +602,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
               <button onClick={() => { setActiveTab("Media"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><ImagePlus size={17} /> Media</button>
               <button onClick={() => { setActiveTab("Reposts"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Repeat2 size={17} /> Reposts</button>
               <button onClick={() => { shareProfile(); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Share2 size={17} /> Share profile</button>
+              <button onClick={() => { void shareStoryCard(); setMenuOpen(false); }} disabled={shareCardBusy} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 disabled:opacity-60 dark:hover:bg-white/10"><ImagePlus size={17} /> Share story card</button>
               {isOwnProfile ? (
                 <>
                   <button onClick={() => { setActiveTab("Likes"); setMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left font-semibold hover:bg-slate-100 dark:hover:bg-white/10"><Heart size={17} /> Liked posts</button>
@@ -809,7 +826,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
       {verificationOpen ? <VerificationSheet user={user} isOwnProfile={isOwnProfile} status={verificationStatus} reason={verificationReason} onClose={() => setVerificationOpen(false)} onRequestVerification={onRequestVerification} /> : null}
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
       {networkList ? (
-        <div onPointerDown={(event) => { if (event.target === event.currentTarget) setNetworkList(undefined); }} onWheel={(event) => event.preventDefault()} onTouchMove={(event) => event.preventDefault()} className="fixed inset-0 z-[72] grid place-items-end overflow-hidden bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+        <div onPointerDown={(event) => { if (event.target === event.currentTarget) setNetworkList(undefined); }} className="fixed inset-0 z-[72] grid place-items-end overflow-hidden bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
           <section
             onPointerDown={(event) => event.stopPropagation()}
             className="modal-enter modal-scroll-pane flex h-[min(82dvh,620px)] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl"

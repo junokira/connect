@@ -21,6 +21,9 @@ body {
   min-width: 320px;
   min-height: 100dvh;
   overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 button,
@@ -55,8 +58,18 @@ select:focus-visible {
   outline: none;
 }
 
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 img,
 video {
+  -webkit-touch-callout: none;
   -webkit-user-drag: none;
   user-select: none;
 }

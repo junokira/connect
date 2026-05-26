@@ -1,5 +1,5 @@
 import { Apple, Eye, EyeOff, ImageOff, Loader2, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, Volume2, VolumeX, X } from "lucide-react";
-import { FormEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, MouseEvent as ReactMouseEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasFeed } from "./components/CanvasFeed";
 import { ActivityView as NotificationsActivityView } from "./components/ActivityView";
 import { Composer } from "./components/Composer";
@@ -593,6 +593,7 @@ export default function App() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [refreshPull, setRefreshPull] = useState(0);
   const [refreshingPull, setRefreshingPull] = useState(false);
+  const [gestureHint, setGestureHint] = useState("");
   const refreshTimer = useRef<number | undefined>(undefined);
   const focusedInitialCluster = useRef(false);
   const pullRef = useRef<{ y: number; active: boolean } | null>(null);
@@ -796,10 +797,11 @@ export default function App() {
     window.history.pushState({}, "", "/");
   }, [setActiveProfile]);
   const shareProfile = useCallback(async (profile: User) => {
-    const url = `${window.location.origin}/u/${encodeURIComponent(profile.username)}`;
+    const url = new URL(`/u/${encodeURIComponent(profile.username)}`, window.location.origin).toString();
     const title = `${profile.displayName} (@${profile.username}) on CONNECT`;
     const text = profile.verified ? `Verified CONNECT profile: @${profile.username}\n${url}` : `CONNECT profile: @${profile.username}\n${url}`;
     try {
+      navigator.vibrate?.(8);
       if (navigator.share) {
         await navigator.share({ title, text, url });
         return;
@@ -812,17 +814,27 @@ export default function App() {
   const pullRefreshEnabled = activeView === "explore" || activeView === "activity";
   const runPullRefresh = useCallback(async () => {
     if (refreshingPull || !pullRefreshEnabled) return;
+    const refreshView = activeView;
     setRefreshingPull(true);
     setRefreshPull(72);
     try {
       await refreshData();
+      setActiveView(refreshView);
     } finally {
       window.setTimeout(() => {
         setRefreshingPull(false);
         setRefreshPull(0);
       }, 420);
     }
-  }, [pullRefreshEnabled, refreshData, refreshingPull]);
+  }, [activeView, pullRefreshEnabled, refreshData, refreshingPull]);
+  const handleContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("input,textarea,select,[contenteditable='true']")) return;
+    event.preventDefault();
+    navigator.vibrate?.(8);
+    setGestureHint("Use CONNECT share");
+    window.setTimeout(() => setGestureHint(""), 1200);
+  }, []);
   const handlePullStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
     if (!pullRefreshEnabled) return;
     if (event.touches.length !== 1) return;
@@ -889,7 +901,13 @@ export default function App() {
       onTouchMove={handlePullMove}
       onTouchEnd={handlePullEnd}
       onTouchCancel={handlePullEnd}
+      onContextMenu={handleContextMenu}
     >
+      {gestureHint ? (
+        <div className="pointer-events-none fixed left-1/2 top-[max(64px,calc(env(safe-area-inset-top)+54px))] z-[90] -translate-x-1/2 rounded-full border border-slate-200 bg-white/92 px-4 py-2 text-xs font-black text-slate-700 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/92 dark:text-slate-100">
+          {gestureHint}
+        </div>
+      ) : null}
       {pullRefreshEnabled ? (
         <div
           className="pointer-events-none fixed left-1/2 top-[max(12px,env(safe-area-inset-top))] z-[90] grid h-11 w-11 -translate-x-1/2 place-items-center rounded-full border border-slate-200 bg-white/90 text-slate-600 shadow-glass backdrop-blur-xl transition-all duration-200 dark:border-white/10 dark:bg-slate-950/90 dark:text-slate-200"
