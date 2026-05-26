@@ -1,4 +1,4 @@
-import { Apple, Eye, EyeOff, ImageOff, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, Volume2, VolumeX, X } from "lucide-react";
+import { Apple, Eye, EyeOff, ImageOff, Loader2, LocateFixed, LogIn, Mail, Maximize2, Minus, Moon, Phone, Plus, Search, SlidersHorizontal, Sun, UserPlus, Volume2, VolumeX, X } from "lucide-react";
 import { FormEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasFeed } from "./components/CanvasFeed";
 import { ActivityView as NotificationsActivityView } from "./components/ActivityView";
@@ -242,9 +242,19 @@ function SearchBox({ compact = false, onFocus }: { compact?: boolean; onFocus?: 
         value={search}
         onFocus={onFocus}
         onChange={(event) => setSearch(event.target.value)}
-        className={`h-11 w-full rounded-2xl border border-slate-200 bg-white/90 pl-10 pr-4 text-sm outline-none focus:border-slate-950 dark:border-white/10 dark:bg-slate-950/90 dark:focus:border-white ${compact ? "lg:w-80" : ""}`}
+        className={`h-11 w-full rounded-2xl border border-slate-200 bg-white/90 pl-10 ${search ? "pr-9" : "pr-4"} text-sm outline-none focus:border-slate-950 dark:border-white/10 dark:bg-slate-950/90 dark:focus:border-white ${compact ? "lg:w-80" : ""}`}
         placeholder="Search CONNECT"
       />
+      {search ? (
+        <button
+          type="button"
+          onClick={() => setSearch("")}
+          className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-white/15 dark:text-slate-300"
+          aria-label="Clear search"
+        >
+          <X size={14} />
+        </button>
+      ) : null}
     </label>
   );
 }
@@ -293,8 +303,8 @@ function AdjustPanel({
   if (!open) return null;
 
   return (
-    <div onMouseDown={onClose} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <section onMouseDown={(event) => event.stopPropagation()} className="w-full max-w-xl rounded-t-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
+    <div onPointerDown={onClose} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <section onPointerDown={(event) => event.stopPropagation()} className="w-full max-w-xl rounded-t-[28px] border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-lg font-black">Adjust</p>
@@ -374,7 +384,7 @@ function SearchView({
   const hasResults = posts.length > 0 || matchedUsers.length > 0;
 
   return (
-    <main className="thin-scrollbar h-full overflow-y-auto px-4 pb-28 pt-20 lg:px-8">
+    <main className="thin-scrollbar modal-scroll-pane h-full overflow-y-auto px-4 pb-[max(112px,calc(env(safe-area-inset-bottom)+96px))] pt-20 lg:px-8">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 max-w-2xl">
           <h1 className="mb-3 text-3xl font-black">Search</h1>
@@ -452,7 +462,7 @@ function ExploreView({
   const mediaPreview = (post: ReturnType<typeof getFilteredPosts>[number]) => post.imageUrl || post.thumbnailUrl || post.sourceThumb || getYoutubeThumbnail(post.videoUrl || post.sourceUrl || "");
 
   return (
-    <main className="thin-scrollbar h-full overflow-y-auto px-4 pb-28 pt-20 lg:px-8">
+    <main className="thin-scrollbar modal-scroll-pane h-full overflow-y-auto px-4 pb-[max(112px,calc(env(safe-area-inset-bottom)+96px))] pt-20 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
           <h1 className="text-3xl font-black">Explore</h1>
@@ -593,6 +603,16 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
+    const color = theme === "dark" ? "#050505" : "#f5f5f7";
+    document.documentElement.style.backgroundColor = color;
+    document.body.style.backgroundColor = color;
+    let themeMeta = document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!themeMeta) {
+      themeMeta = document.createElement("meta");
+      themeMeta.name = "theme-color";
+      document.head.appendChild(themeMeta);
+    }
+    themeMeta.content = color;
   }, [theme]);
 
   useEffect(() => {
@@ -726,11 +746,11 @@ export default function App() {
       setMeta("name", "twitter:image", image);
     }
   }, [activeAuthor, activePost, activeProfile]);
-  const reactionState = (postId: string) => ({
+  const reactionState = useCallback((postId: string) => ({
     liked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "like"),
     reposted: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "repost"),
     bookmarked: reactions.some((reaction) => reaction.postId === postId && reaction.userId === currentUserId && reaction.type === "bookmark")
-  });
+  }), [currentUserId, reactions]);
   const zoomBy = (amount: number) => setCanvasView({ ...canvasView, zoom: Math.max(0.35, Math.min(2.2, canvasView.zoom + amount)) });
   const focusPost = useCallback((post = latest, zoom = 0.95) => {
     if (!post) return;
@@ -789,8 +809,9 @@ export default function App() {
       await navigator.clipboard?.writeText(url).catch(() => undefined);
     }
   }, []);
+  const pullRefreshEnabled = activeView === "explore" || activeView === "activity";
   const runPullRefresh = useCallback(async () => {
-    if (refreshingPull) return;
+    if (refreshingPull || !pullRefreshEnabled) return;
     setRefreshingPull(true);
     setRefreshPull(72);
     try {
@@ -801,16 +822,16 @@ export default function App() {
         setRefreshPull(0);
       }, 420);
     }
-  }, [refreshData, refreshingPull]);
+  }, [pullRefreshEnabled, refreshData, refreshingPull]);
   const handlePullStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
-    if (activeView === "canvas" && !activeProfile) return;
+    if (!pullRefreshEnabled) return;
     if (event.touches.length !== 1) return;
     const target = event.target as HTMLElement;
-    if (target.closest(".canvas-viewport,[role='dialog'],input,textarea,select,button,a,iframe,video")) return;
+    if (target.closest(".canvas-viewport,.canvas-layer,[role='dialog'],input,textarea,select,button,a,iframe,video")) return;
     const scrollParent = target.closest<HTMLElement>(".thin-scrollbar, [data-scroll-root='profile']");
     const atTop = !scrollParent || scrollParent.scrollTop <= 2;
     pullRef.current = { y: event.touches[0].clientY, active: atTop };
-  }, [activeProfile, activeView]);
+  }, [pullRefreshEnabled]);
   const handlePullMove = useCallback((event: TouchEvent<HTMLDivElement>) => {
     const start = pullRef.current;
     if (!start?.active || refreshingPull) return;
@@ -822,6 +843,11 @@ export default function App() {
     setRefreshPull(Math.min(86, delta * 0.42));
   }, [refreshingPull]);
   const handlePullEnd = useCallback(() => {
+    if (!pullRefreshEnabled) {
+      pullRef.current = null;
+      setRefreshPull(0);
+      return;
+    }
     const shouldRefresh = refreshPull > 58;
     pullRef.current = null;
     if (shouldRefresh) {
@@ -829,7 +855,7 @@ export default function App() {
       return;
     }
     setRefreshPull(0);
-  }, [refreshPull, runPullRefresh]);
+  }, [pullRefreshEnabled, refreshPull, runPullRefresh]);
   const handleHashtagClick = useCallback((tag: string) => {
     useAppStore.getState().setSearch(`#${tag}`);
     setActiveView("search");
@@ -843,7 +869,7 @@ export default function App() {
 
   if (loading && !authed) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#f7f7f4] p-4 text-slate-950 dark:bg-[#0e1116] dark:text-white">
+      <main className="grid min-h-[100dvh] place-items-center bg-[#f7f7f4] p-4 text-slate-950 dark:bg-[#0e1116] dark:text-white">
         <p className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold shadow-glass dark:border-white/10 dark:bg-slate-950">Loading CONNECT...</p>
       </main>
     );
@@ -858,18 +884,21 @@ export default function App() {
 
   return (
     <div
-      className="flex h-screen overflow-hidden bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white"
+      className="flex h-[100dvh] overflow-hidden bg-[#f5f5f7] text-slate-950 dark:bg-[#050505] dark:text-white"
       onTouchStart={handlePullStart}
       onTouchMove={handlePullMove}
       onTouchEnd={handlePullEnd}
       onTouchCancel={handlePullEnd}
     >
-      <div
-        className="pointer-events-none fixed left-1/2 top-[max(12px,env(safe-area-inset-top))] z-[90] -translate-x-1/2 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-xs font-black text-slate-600 shadow-glass backdrop-blur-xl transition-all duration-200 dark:border-white/10 dark:bg-slate-950/90 dark:text-slate-200"
-        style={{ opacity: refreshPull > 8 || refreshingPull ? 1 : 0, transform: `translate(-50%, ${Math.max(0, refreshPull - 18)}px) scale(${refreshingPull ? 1 : 0.94 + Math.min(refreshPull, 70) / 700})` }}
-      >
-        {refreshingPull ? "Refreshing..." : refreshPull > 58 ? "Release to refresh" : "Pull to refresh"}
-      </div>
+      {pullRefreshEnabled ? (
+        <div
+          className="pointer-events-none fixed left-1/2 top-[max(12px,env(safe-area-inset-top))] z-[90] grid h-11 w-11 -translate-x-1/2 place-items-center rounded-full border border-slate-200 bg-white/90 text-slate-600 shadow-glass backdrop-blur-xl transition-all duration-200 dark:border-white/10 dark:bg-slate-950/90 dark:text-slate-200"
+          style={{ opacity: refreshPull > 8 || refreshingPull ? 1 : 0, transform: `translate(-50%, ${Math.max(0, refreshPull - 18)}px) scale(${refreshingPull ? 1 : 0.84 + Math.min(refreshPull, 70) / 420})` }}
+          aria-hidden="true"
+        >
+          <Loader2 className={refreshingPull || refreshPull > 58 ? "animate-spin" : ""} size={18} />
+        </div>
+      ) : null}
       {!chromeHidden && !profileCanvasFullscreen ? (
         <Sidebar
           currentUser={currentUser}
@@ -924,7 +953,6 @@ export default function App() {
             mutes={mutes}
             onEditPost={(id) => { setEditingPostId(id); openPost(id); }}
             onDeletePost={(id) => void deletePost(id)}
-            onMuteUser={(id) => void (mutes.some((mute) => mute.mutedId === id) ? unmuteUser(id) : muteUser(id))}
             onReportPost={(id) => void reportPost(id, "other")}
             onHashtagClick={handleHashtagClick}
             onPinPost={(id) => void pinPost(id)}

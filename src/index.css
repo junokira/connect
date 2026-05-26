@@ -19,8 +19,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
-  overflow: hidden;
+  min-height: 100dvh;
   overscroll-behavior: none;
 }
 
@@ -44,6 +43,18 @@ button:active {
   transform: scale(0.96);
 }
 
+:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
 img,
 video {
   -webkit-user-drag: none;
@@ -53,7 +64,6 @@ video {
 .canvas-dots {
   background-image: radial-gradient(circle, rgba(60, 60, 67, 0.2) 1px, transparent 1px);
   background-size: 24px 24px;
-  will-change: background-position, background-size;
 }
 
 .dark .canvas-dots {
@@ -86,6 +96,12 @@ video {
 .canvas-viewport {
   touch-action: none;
   overscroll-behavior: none;
+}
+
+.modal-scroll-pane {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .canvas-layer {
@@ -237,6 +253,38 @@ video {
   border-left: 2px solid rgba(100, 116, 139, 0.2);
   margin-left: 28px;
   padding-left: 12px;
+}
+
+.safe-bottom {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.canvas-viewport * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.modal-text-selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.no-double-tap-zoom {
+  touch-action: manipulation;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html {
+    background-color: #030712;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

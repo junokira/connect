@@ -27,7 +27,7 @@ export function resolveCanvasCollisions(items: CanvasLayoutItem[]) {
     let position = { ...item.position };
     if (occupied.some((other) => canvasRectsOverlap(position, other))) {
       let resolved: Point | undefined;
-      for (let ring = 1; ring < 80 && !resolved; ring += 1) {
+      for (let ring = 1; ring < 60 && !resolved; ring += 1) {
         for (let dx = -ring; dx <= ring && !resolved; dx += 1) {
           for (let dy = -ring; dy <= ring && !resolved; dy += 1) {
             if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;

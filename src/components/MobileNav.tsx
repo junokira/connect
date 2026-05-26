@@ -102,7 +102,7 @@ export function MobileNav({ activeView, profileActive = false, unreadCount, onHo
       <button onClick={tap(onExplore)} className={buttonClass(activeView === "explore" && !profileActive)} aria-label="Explore">
         <Compass size={21} />
       </button>
-      <button onClick={tap(onCreate)} className={`dock-item relative z-10 grid h-12 w-12 place-items-center rounded-full shadow-lg ${dragIndex === 2 ? "bg-white text-slate-950 dark:bg-slate-950 dark:text-white" : "bg-slate-950 text-white dark:bg-white dark:text-slate-950"}`} aria-label="Create">
+      <button onClick={tap(onCreate)} className={`dock-item no-double-tap-zoom relative z-10 grid h-12 w-12 place-items-center rounded-full shadow-lg ${dragIndex === 2 ? "bg-white text-slate-950 dark:bg-slate-950 dark:text-white" : "bg-slate-950 text-white dark:bg-white dark:text-slate-950"}`} aria-label="Create post">
         <Plus size={22} />
       </button>
       <div className="relative z-10">

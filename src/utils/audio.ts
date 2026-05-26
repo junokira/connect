@@ -2,8 +2,10 @@ let context: AudioContext | undefined;
 
 export function unlockAudio() {
   if (typeof window === "undefined") return undefined;
-  context ||= new AudioContext();
-  if (context.state === "suspended") void context.resume();
+  const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) return undefined;
+  context ||= new AudioContextCtor();
+  if (context.state === "suspended") void context.resume().catch(() => undefined);
   return context;
 }
 

@@ -26,7 +26,7 @@ export function ActivityView({ notifications, users, posts, onMarkAllRead, onOpe
   };
 
   return (
-    <main className="thin-scrollbar h-full overflow-y-auto px-4 pb-28 pt-20 lg:px-8">
+    <main className="thin-scrollbar modal-scroll-pane h-full overflow-y-auto px-4 pb-[max(112px,calc(env(safe-area-inset-bottom)+96px))] pt-20 lg:px-8">
       <div className="mx-auto max-w-3xl">
         <header className="mb-6 flex items-center justify-between gap-4">
           <div>
@@ -45,7 +45,7 @@ export function ActivityView({ notifications, users, posts, onMarkAllRead, onOpe
                 onClick={() => notification.postId ? onOpenPost(notification.postId) : actor && onOpenProfile(actor.id)}
                 className={`flex w-full items-center gap-3 rounded-3xl border border-slate-200 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-glass dark:border-white/10 ${notification.read ? "bg-white dark:bg-[#111113]" : "bg-blue-50/70 dark:bg-blue-400/[0.08]"}`}
               >
-                <img className="h-12 w-12 rounded-full object-cover" src={actor?.avatarUrl} alt="" />
+                <img className="h-12 w-12 shrink-0 rounded-full bg-slate-200 object-cover dark:bg-white/10" src={actor?.avatarUrl || ""} alt="" onError={(event) => { (event.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1 text-sm font-bold">
                     <span className="truncate">{actor?.displayName || "CONNECT user"}</span>

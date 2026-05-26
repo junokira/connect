@@ -25,12 +25,12 @@ type Props = {
 export function Sidebar({ currentUser, activeView, unreadCount, onHome, onExplore, onActivity, onCreate, onProfile, onSignOut }: Props) {
   const streakLabel = currentUser.postStreak >= 30 ? "Legendary" : currentUser.postStreak >= 7 ? "Blazing" : "On Fire";
   return (
-    <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/82 p-5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/82 lg:block">
+    <aside className="hidden w-72 shrink-0 flex-col border-r border-slate-200 bg-white/82 p-5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/82 lg:flex">
       <div className="mb-8">
         <p className="text-xl font-black tracking-tight text-slate-950 dark:text-white">CONNECT</p>
         <p className="text-sm text-slate-500 dark:text-slate-400">Spatial social canvas</p>
       </div>
-      <nav className="space-y-1">
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto">
         {nav.map(([label, Icon]) => (
           <button
             key={label}

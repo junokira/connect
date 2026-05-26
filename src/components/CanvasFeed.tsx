@@ -22,7 +22,6 @@ type Props = {
   mutes?: UserMute[];
   onEditPost?: (id: string) => void;
   onDeletePost?: (id: string) => void;
-  onMuteUser?: (userId: string) => void;
   onReportPost?: (id: string) => void;
   onHashtagClick?: (tag: string) => void;
   onPinPost?: (id: string) => void;
@@ -88,7 +87,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: topic + column * 214 - 428, y: (day % 9) * 28 + row * 268 - 190 };
 };
 
-export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0, overviewSignal = 0, interactive = true, interactionMode, showControls = true, controlsClassName, adminMode = false, onOpenDashboard }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onReportPost, onHashtagClick, onPinPost, className = "h-[100dvh]", recenterSignal = 0, overviewSignal = 0, interactive = true, interactionMode, showControls = true, controlsClassName, adminMode = false, onOpenDashboard }: Props) {
   const mode = interactionMode || (interactive ? "full" : "none");
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
@@ -171,7 +170,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   const positionedPosts = useMemo(() => {
     if (mode === "horizontal") {
       const ordered = [...visibleSourcePosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-      return ordered.map((post, index) => ({ post, position: { x: index * 372 - 120, y: -220 } }));
+      return ordered.map((post, index) => ({ post, position: { x: index * 372 - 120, y: -245 } }));
     }
     return resolveCanvasCollisions(visibleSourcePosts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) })));
   }, [feedStyle, mode, visibleSourcePosts]);
@@ -241,7 +240,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   }, [animateView, positionedPosts, size.height, size.width]);
 
   const visiblePosts = useMemo(() => {
-    const padding = 640;
+    const padding = Math.max(240, Math.min(480, 320 / view.zoom));
     const centerX = size.width / 2;
     const centerY = size.height / 2;
     const minX = (-centerX - view.x - padding) / view.zoom;
@@ -275,7 +274,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     if (horizontalStartupRef.current === startupKey) return;
     horizontalStartupRef.current = startupKey;
     const targetX = clampHorizontalX(-first.position.x - size.width / 2 + 28);
-    const targetY = -first.position.y - Math.max(82, size.height * 0.24);
+    const targetY = -first.position.y - Math.max(118, size.height * 0.32);
     const frame = requestAnimationFrame(() => scheduleView({ x: targetX, y: targetY, zoom: 0.95 }));
     return () => cancelAnimationFrame(frame);
   }, [clampHorizontalX, mode, positionedPosts, scheduleView, size.height, size.width]);
@@ -294,6 +293,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     event.stopPropagation();
     if (mode === "none") return;
     if ((event.target as HTMLElement).closest("button,input,select,textarea,a,video")) return;
+    event.preventDefault();
     if (animationRef.current !== null) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
@@ -347,8 +347,8 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
 
   const touchMove = (event: TouchEvent<HTMLDivElement>) => {
     if (mode !== "full") return;
-    event.stopPropagation();
     if (event.touches.length !== 2) return;
+    event.stopPropagation();
     event.preventDefault();
     if (animationRef.current !== null) {
       cancelAnimationFrame(animationRef.current);
@@ -388,13 +388,18 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
       }}
       onTouchEnd={() => (touchRef.current = null)}
       onClickCapture={(event) => {
-        if (!didDragRef.current && !suppressClickRef.current) return;
-        event.stopPropagation();
-        didDragRef.current = false;
-        suppressClickRef.current = false;
+        if (suppressClickRef.current) {
+          event.stopPropagation();
+          suppressClickRef.current = false;
+          return;
+        }
+        if (didDragRef.current) {
+          event.stopPropagation();
+          didDragRef.current = false;
+        }
       }}
     >
-      <div className="canvas-dots absolute inset-0" style={{ backgroundPosition: `${view.x}px ${view.y}px`, backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px` }} />
+      <div className="canvas-dots absolute inset-0" style={{ backgroundPosition: `${view.x % (24 * view.zoom)}px ${view.y % (24 * view.zoom)}px`, backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px`, willChange: "background-position" }} />
       {showControls ? <button
         onClick={(event) => {
           event.stopPropagation();
@@ -404,7 +409,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
           }
           centerLatest();
         }}
-        className={`${controlsClassName || "left-4 top-4"} absolute z-20 flex h-11 items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 dark:border-white/10 dark:bg-[#111113]/88 dark:focus-visible:ring-white`}
+        className={`${controlsClassName || "left-4 top-[max(16px,calc(env(safe-area-inset-top)+16px))]"} absolute z-20 flex h-11 items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 dark:border-white/10 dark:bg-[#111113]/88 dark:focus-visible:ring-white`}
         aria-label={adminMode ? "Open creator dashboard" : "Jump to latest posts"}
       >
         {adminMode ? <Shield size={17} /> : <LocateFixed size={17} />}
@@ -452,7 +457,6 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
                 onBookmark={() => onBookmarkPost(post.id)}
                 onEdit={() => onEditPost?.(post.id)}
                 onDelete={() => onDeletePost?.(post.id)}
-                onMute={() => onMuteUser?.(author.id)}
                 onReport={() => onReportPost?.(post.id)}
                 onHashtagClick={onHashtagClick}
                 onPinPost={() => onPinPost?.(post.id)}

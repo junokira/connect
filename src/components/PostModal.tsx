@@ -1,5 +1,5 @@
 import { Bookmark, Heart, Link, MessageCircle, Repeat2, Share2, Sticker, Trash2, X } from "lucide-react";
-import { FormEvent, MouseEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Comment, CommentReaction, Post, User } from "../types";
 import { getPlatformLabel, getVideoEmbedUrl, isDirectVideoUrl, normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
@@ -107,7 +107,6 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
       setShareStatus("Link copied.");
     }
   };
-  const stop = (event: MouseEvent) => event.stopPropagation();
   const openProfile = (id: string) => {
     onOpenProfile(id);
     onClose();
@@ -125,7 +124,7 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
     const touch = event.changedTouches[0];
     const deltaY = touch.clientY - start.y;
     const deltaX = Math.abs(touch.clientX - start.x);
-    if (deltaY > 132 && deltaY > deltaX * 1.6 && (scrollerRef.current?.scrollTop || 0) <= 8) onClose();
+    if (deltaY > 88 && deltaY > deltaX * 1.6 && (scrollerRef.current?.scrollTop || 0) <= 8) onClose();
   };
   const renderComment = (item: Comment, nested = false) => {
     const user = users.find((candidate) => candidate.id === item.authorId);
@@ -134,7 +133,7 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
       <div key={item.id} className={`${nested ? "comment-reply bg-slate-50 dark:bg-white/[0.03]" : ""} group rounded-2xl p-2 hover:bg-white dark:hover:bg-white/10`}>
         <div className="flex gap-3">
           <button type="button" disabled={!user} onClick={() => user && openProfile(user.id)} className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
-            {user ? <img className="h-full w-full object-cover" src={user.avatarUrl} alt="" /> : null}
+            {user ? <img className="h-full w-full object-cover bg-slate-200 dark:bg-white/10" src={user.avatarUrl} alt="" onError={(event) => { (event.target as HTMLImageElement).style.visibility = "hidden"; }} /> : null}
           </button>
           <div className="min-w-0 flex-1">
             <button type="button" disabled={!user} onClick={() => user && openProfile(user.id)} className="flex max-w-full items-center gap-1 text-left text-sm font-bold">
@@ -163,21 +162,30 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
   };
 
   return (
-    <div onMouseDown={onClose} className="fixed inset-0 z-[65] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <section onMouseDown={stop} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter thin-scrollbar flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-950 sm:rounded-3xl">
+    <div onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className="fixed inset-0 z-[65] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <section onPointerDown={(event) => event.stopPropagation()} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter modal-scroll-pane thin-scrollbar flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-950 sm:rounded-3xl" style={{ maxHeight: "min(94dvh, 100%)" }}>
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
           <button type="button" onClick={() => openProfile(author.id)} className="flex min-w-0 items-center gap-3 rounded-2xl text-left">
-            <img className="h-11 w-11 rounded-full object-cover" src={author.avatarUrl} alt="" />
+            <img className="h-11 w-11 rounded-full bg-slate-200 object-cover dark:bg-white/10" src={author.avatarUrl} alt="" onError={(event) => { (event.target as HTMLImageElement).style.visibility = "hidden"; }} />
             <span className="min-w-0"><span className="flex items-center gap-1 truncate font-semibold">{author.displayName}<VerifiedBadge verified={author.verified} size={15} /></span><span className="block truncate text-sm text-slate-500">@{author.username} · {formatDate(post.createdAt)}</span></span>
           </button>
           <div className="flex items-center gap-1">
             {post.authorId === currentUserId ? <button onClick={() => { setEditing(true); onEditPost?.(); }} className="rounded-xl px-3 py-2 text-sm font-bold hover:bg-slate-100 dark:hover:bg-white/10">Edit</button> : null}
-            {post.authorId === currentUserId ? <button onClick={onDeletePost} className="rounded-xl px-3 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-400/10">Delete</button> : null}
+            {post.authorId === currentUserId ? (
+              deleteConfirm === post.id ? (
+                <span className="flex items-center gap-1">
+                  <button onClick={() => setDeleteConfirm("")} className="rounded-xl px-3 py-2 text-sm font-bold hover:bg-slate-100 dark:hover:bg-white/10">Cancel</button>
+                  <button onClick={() => { onDeletePost?.(); onClose(); }} className="rounded-xl px-3 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-400/10">Confirm delete</button>
+                </span>
+              ) : (
+                <button onClick={() => setDeleteConfirm(post.id)} className="rounded-xl px-3 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-400/10">Delete</button>
+              )
+            ) : null}
             <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close post"><X size={20} /></button>
           </div>
         </header>
 
-        <div ref={scrollerRef} className="thin-scrollbar overflow-y-auto">
+        <div ref={scrollerRef} className="thin-scrollbar modal-scroll-pane overflow-y-auto">
           {post.type === "photo" && post.imageUrl ? <img className="max-h-[62vh] w-full object-contain bg-slate-100 dark:bg-black" src={post.imageUrl} alt="" /> : null}
           {post.type === "video" && videoUrl && isDirectVideoUrl(videoUrl) ? <video className="max-h-[62vh] w-full bg-black object-contain" src={videoUrl} poster={post.thumbnailUrl} controls /> : null}
           {post.type === "video" && videoUrl && embedUrl ? <iframe className="aspect-video max-h-[62vh] w-full bg-black" src={embedUrl} title="Video post" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /> : null}
@@ -212,11 +220,11 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
             </div>
             <aside className="flex min-h-[320px] flex-col rounded-3xl border border-slate-200 bg-[#f5f5f7] dark:border-white/10 dark:bg-white/[0.04]">
               <div className="border-b border-slate-200 px-4 py-3 dark:border-white/10"><p className="text-sm font-black">Comments</p><p className="text-xs text-slate-500">{formatCount(post.commentsCount)} replies</p></div>
-              <div className="thin-scrollbar max-h-[42vh] flex-1 space-y-1 overflow-y-auto p-3">
+              <div className="thin-scrollbar modal-scroll-pane min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
                 {threads.map(({ item, replies }) => <div key={item.id}>{renderComment(item)}{replies.map((reply) => renderComment(reply, true))}</div>)}
                 {!comments.length ? <p className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500 dark:border-white/15">No comments yet. Start the conversation.</p> : null}
               </div>
-              <form onSubmit={submit} className="sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/95">
+              <form onSubmit={submit} className="sticky bottom-0 border-t border-slate-200 bg-white/95 p-3 pb-[max(12px,env(safe-area-inset-bottom))] backdrop-blur dark:border-white/10 dark:bg-slate-950/95">
                 {replyingTo ? <p className="mb-2 text-xs font-bold text-[#007aff]">Replying to @{replyingTo.authorUsername} <button type="button" onClick={() => setReplyingTo(undefined)} className="text-slate-400">cancel</button></p> : null}
                 {pendingGif ? <img src={pendingGif} className="mb-2 max-h-32 rounded-xl" alt="Selected GIF" /> : null}
                 <textarea value={comment} onChange={(event) => setComment(event.target.value)} className="max-h-28 min-h-10 w-full resize-none rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none dark:border-white/10 dark:bg-slate-950" placeholder={replyingTo ? `@${replyingTo.authorUsername} ` : "Reply to this post..."} />
@@ -225,7 +233,7 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
                   <button type="button" onClick={() => void share()} className="flex items-center gap-1 text-xs font-bold text-slate-500"><Link size={14} /> Copy link</button>
                   <button className="rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950" disabled={!comment.trim() && !pendingGif}>Reply</button>
                 </div>
-                {gifSearch ? <div className="mt-2 rounded-2xl border border-slate-200 p-2 dark:border-white/10"><div className="flex gap-2"><input value={gifSearch} onChange={(event) => setGifSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Search GIFs" /><button type="button" onClick={() => void searchGifs()} className="text-xs font-bold">Search</button></div>{gifError ? <p className="text-xs text-rose-500">{gifError}</p> : null}<div className="mt-2 grid grid-cols-3 gap-1">{gifResults.map((gif) => <button type="button" key={gif} onClick={() => setPendingGif(gif)}><img className="h-16 w-full rounded-lg object-cover" src={gif} alt="" /></button>)}</div></div> : null}
+                {gifSearch ? <div className="mt-2 rounded-2xl border border-slate-200 p-2 dark:border-white/10"><div className="flex gap-2"><input value={gifSearch} onChange={(event) => setGifSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void searchGifs(); } }} className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Search GIFs" /><button type="button" onClick={() => void searchGifs()} className="text-xs font-bold">Search</button></div>{gifError ? <p className="text-xs text-rose-500">{gifError}</p> : null}<div className="mt-2 grid grid-cols-3 gap-1">{gifResults.map((gif) => <button type="button" key={gif} onClick={() => setPendingGif(gif)}><img className="h-16 w-full rounded-lg object-cover" src={gif} alt="" /></button>)}</div></div> : null}
               </form>
             </aside>
           </div>

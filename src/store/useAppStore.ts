@@ -246,14 +246,18 @@ export const useAppStore = create<AppState>()(
         }
       },
       refreshData: async () => {
-        if (!isSupabaseConfigured) throw new Error("Supabase is not configured.");
-        const data = await loadConnectData();
-        const userId = get().currentUserId;
-        const currentUserEmail = userId ? await getCurrentAuthEmail() : "";
-        const extras = await loadSafeExtras(userId);
-        const notifications = await loadSafeNotifications(userId);
-        const verification = await loadSafeVerification(userId);
-        set({ ...data, ...extras, currentUserEmail, verificationStatus: verification.status, verificationReason: verification.reason, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length });
+        if (!isSupabaseConfigured) return;
+        try {
+          const data = await loadConnectData();
+          const userId = get().currentUserId;
+          const currentUserEmail = userId ? await getCurrentAuthEmail() : "";
+          const extras = await loadSafeExtras(userId);
+          const notifications = await loadSafeNotifications(userId);
+          const verification = await loadSafeVerification(userId);
+          set({ ...data, ...extras, currentUserEmail, verificationStatus: verification.status, verificationReason: verification.reason, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, error: undefined });
+        } catch (error) {
+          console.warn("CONNECT refresh failed:", error);
+        }
       },
       signIn: async (email, password) => {
         if (!isSupabaseConfigured) {

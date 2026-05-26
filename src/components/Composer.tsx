@@ -1,5 +1,5 @@
 import { Image, Link2, Loader2, Send, Upload, Video, X } from "lucide-react";
-import { ClipboardEvent, FormEvent, MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ClipboardEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { OGPreview, PostType, User } from "../types";
 import { fetchOGPreview } from "../lib/supabaseData";
 import { getVideoEmbedUrl, isDirectVideoUrl, normalizeExternalUrl } from "../utils/media";
@@ -104,7 +104,10 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   useEffect(() => {
     if (!open) return undefined;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") requestClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestClose();
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
@@ -135,7 +138,6 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
 
   if (!open) return null;
 
-  const stop = (event: MouseEvent) => event.stopPropagation();
   const handlePaste = (event: ClipboardEvent<HTMLFormElement>) => {
     const file = event.clipboardData?.files?.[0];
     if (file?.type.startsWith("image/")) {
@@ -205,8 +207,8 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
   };
 
   return (
-    <div onMouseDown={requestClose} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <form onMouseDown={stop} onPaste={handlePaste} onSubmit={publish} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
+    <div onPointerDown={(event) => { if (event.target === event.currentTarget) requestClose(); }} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <form onPointerDown={(event) => event.stopPropagation()} onPaste={handlePaste} onSubmit={publish} className="modal-scroll-pane max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))] shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img className="h-11 w-11 rounded-full object-cover" src={currentUser.avatarUrl} alt="" />
@@ -310,7 +312,7 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
                 className="sr-only"
                 type="file"
                 accept={type === "photo" ? "image/*" : "video/*"}
-                onChange={(event) => setMediaFile(event.target.files?.[0])}
+                onChange={(event) => { setMediaFile(event.target.files?.[0]); event.target.value = ""; }}
               />
             </label>
             {type === "video" ? (
@@ -324,7 +326,7 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
                 <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-3 text-sm font-semibold text-slate-600 hover:border-teal-500 hover:text-teal-700 dark:border-white/15 dark:text-slate-300 dark:hover:text-teal-200">
                   <Upload size={17} />
                   Choose thumbnail from library
-                  <input className="sr-only" type="file" accept="image/*" onChange={(event) => setThumbnailFile(event.target.files?.[0])} />
+                  <input className="sr-only" type="file" accept="image/*" onChange={(event) => { setThumbnailFile(event.target.files?.[0]); event.target.value = ""; }} />
                 </label>
               </>
             ) : null}
@@ -375,7 +377,7 @@ export function Composer({ open, currentUser, onClose, onPublish }: Props) {
         </div>
 
         {error ? <p className="mt-4 rounded-2xl bg-rose-50 p-3 text-sm font-medium text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
-        <button type="submit" className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-slate-950" disabled={!canPublish || publishing}>
+        <button type="submit" className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:pointer-events-none disabled:opacity-50 dark:bg-white dark:text-slate-950" disabled={!canPublish || publishing}>
           <Send size={18} />
           {publishing ? "Publishing..." : "Publish to canvas"}
         </button>

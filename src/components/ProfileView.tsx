@@ -200,12 +200,10 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
     }
   };
 
-  const stop = (event: MouseEvent) => event.stopPropagation();
-
   return (
-    <div onMouseDown={onClose} className="fixed inset-0 z-[60] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <form onSubmit={submit} onMouseDown={stop} className="thin-scrollbar flex h-[min(92dvh,760px)] max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
-        <div className="min-h-0 flex-1 overflow-y-auto p-5 pb-6">
+    <div onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className="fixed inset-0 z-[60] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <form onSubmit={submit} onPointerDown={(event) => event.stopPropagation()} className="modal-scroll-pane thin-scrollbar flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
+        <div className="modal-scroll-pane min-h-0 flex-1 overflow-y-auto p-5 pb-6">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-lg font-black">Edit profile</p>
@@ -353,8 +351,8 @@ function VerificationSheet({ user, isOwnProfile, status, reason, onClose, onRequ
   };
 
   return (
-    <div onMouseDown={onClose} className="fixed inset-0 z-[76] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <section onMouseDown={(event) => event.stopPropagation()} className="modal-enter w-full max-w-md rounded-t-[28px] border border-slate-200 bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))] shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
+    <div onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className="fixed inset-0 z-[76] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <section onPointerDown={(event) => event.stopPropagation()} className="modal-enter modal-scroll-pane w-full max-w-md rounded-t-[28px] border border-slate-200 bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))] shadow-2xl dark:border-white/10 dark:bg-[#0f1115] sm:rounded-[28px]">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#007aff]/10 text-[#007aff]">
@@ -531,7 +529,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
     const touch = event.changedTouches[0];
     const deltaX = touch.clientX - start.x;
     const deltaY = Math.abs(touch.clientY - start.y);
-    if (deltaX > 100 && deltaX > deltaY * 1.5) onClose();
+    if (deltaX > 110 && deltaX > deltaY * 2.2) onClose();
   };
   const stopFullscreenControlEvent = (event: MouseEvent | TouchEvent) => {
     event.stopPropagation();
@@ -563,7 +561,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   };
 
   return (
-    <div ref={scrollerRef} data-scroll-root="profile" onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter fixed inset-0 z-20 overflow-y-auto bg-[#f5f5f7] pb-24 text-slate-950 dark:bg-[#050505] dark:text-white lg:left-72 lg:pb-0">
+    <div ref={scrollerRef} data-scroll-root="profile" onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter modal-scroll-pane fixed inset-0 z-20 overflow-y-auto bg-[#f5f5f7] pb-[max(96px,calc(env(safe-area-inset-bottom)+80px))] text-slate-950 dark:bg-[#050505] dark:text-white lg:left-72 lg:pb-0">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
         <div className="min-w-0">
           <p className="flex items-center gap-1 font-bold">
@@ -599,7 +597,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
           ) : null}
         </div>
       </header>
-      <div className="mx-auto max-w-5xl pb-24">
+      <div className="mx-auto max-w-5xl pb-[max(96px,calc(env(safe-area-inset-bottom)+80px))]">
         <div className="relative z-0 h-44 overflow-hidden bg-slate-200 sm:h-64 dark:bg-white/10">
           <button onClick={() => setViewer({ src: user.bannerUrl, label: `${user.displayName} banner`, shape: "banner" })} className="h-full w-full">
             <img className="h-full w-full object-cover" src={user.bannerUrl} alt="" />
@@ -811,17 +809,17 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
       {verificationOpen ? <VerificationSheet user={user} isOwnProfile={isOwnProfile} status={verificationStatus} reason={verificationReason} onClose={() => setVerificationOpen(false)} onRequestVerification={onRequestVerification} /> : null}
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
       {networkList ? (
-        <div onMouseDown={() => setNetworkList(undefined)} onWheel={(event) => event.preventDefault()} onTouchMove={(event) => event.preventDefault()} className="fixed inset-0 z-[72] grid place-items-end overflow-hidden bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+        <div onPointerDown={(event) => { if (event.target === event.currentTarget) setNetworkList(undefined); }} onWheel={(event) => event.preventDefault()} onTouchMove={(event) => event.preventDefault()} className="fixed inset-0 z-[72] grid place-items-end overflow-hidden bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
           <section
-            onMouseDown={(event) => event.stopPropagation()}
-            className="modal-enter flex h-[min(82dvh,620px)] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl"
+            onPointerDown={(event) => event.stopPropagation()}
+            className="modal-enter modal-scroll-pane flex h-[min(82dvh,620px)] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl"
           >
             <div className="mb-4 flex shrink-0 items-center justify-between">
               <p className="text-lg font-black">{networkList === "followers" ? "Followers" : "Following"}</p>
               <button onClick={() => setNetworkList(undefined)} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close network list"><X size={19} /></button>
             </div>
             <div
-              className="thin-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1"
+              className="thin-scrollbar modal-scroll-pane min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1"
               onWheel={(event) => event.stopPropagation()}
               onTouchMove={(event) => event.stopPropagation()}
               style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}

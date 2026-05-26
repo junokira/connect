@@ -22,7 +22,6 @@ type Props = {
   muted?: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
-  onMute?: () => void;
   onReport?: () => void;
   onHashtagClick?: (tag: string) => void;
   onPinPost?: () => void;
@@ -43,7 +42,7 @@ const postTypeIcon = {
   link: ExternalLink
 };
 
-export function PostCard({ post, author, emphasized, liked, reposted, bookmarked, density = "standard", widthClass, showIdentityStripe = false, currentUserId, muted, onEdit, onDelete, onMute, onReport, onHashtagClick, onPinPost, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
+export function PostCard({ post, author, emphasized, liked, reposted, bookmarked, density = "standard", widthClass, showIdentityStripe = false, currentUserId, muted, onEdit, onDelete, onReport, onHashtagClick, onPinPost, onOpen, onProfile, onLike, onComment, onRepost, onBookmark }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [brokenMedia, setBrokenMedia] = useState(false);
   const [delta, setDelta] = useState<"" | "+1" | "-1">("");
@@ -127,16 +126,16 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
 
   useEffect(() => {
     if (!menuOpen) return undefined;
-    const close = (event: globalThis.MouseEvent) => {
+    const close = (event: Event) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuOpen(false);
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMenuOpen(false);
     };
-    window.addEventListener("mousedown", close);
+    window.addEventListener("pointerdown", close);
     window.addEventListener("keydown", escape);
     return () => {
-      window.removeEventListener("mousedown", close);
+      window.removeEventListener("pointerdown", close);
       window.removeEventListener("keydown", escape);
     };
   }, [menuOpen]);
@@ -164,7 +163,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
     <article
       data-canvas-post-id={post.id}
       draggable={false}
-      className={`group relative ${width} ${heatClass} ${ringFlash ? "ring-upgrade-flash" : ""} overflow-hidden rounded-2xl border bg-white/92 text-slate-950 shadow-glass backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-2xl dark:border-white/10 dark:bg-[#111113]/90 dark:text-slate-50 ${
+      className={`group relative ${width} ${heatClass} ${ringFlash ? "ring-upgrade-flash" : ""} overflow-hidden rounded-2xl border bg-white/92 text-slate-950 shadow-glass backdrop-blur transition duration-200 [@media(hover:hover)]:hover:-translate-y-1 [@media(hover:hover)]:hover:shadow-2xl dark:border-white/10 dark:bg-[#111113]/90 dark:text-slate-50 ${
         emphasized ? "ring-2 ring-[#0a84ff]" : "border-[#d2d2d7]"
       }`}
       onClick={onOpen}
@@ -186,7 +185,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
           }}
           aria-label={`Open ${author.displayName}'s profile`}
         >
-          <img className="h-10 w-10 rounded-full object-cover" src={author.avatarUrl} alt="" />
+          <img className="h-10 w-10 rounded-full bg-slate-200 object-cover dark:bg-white/10" src={author.avatarUrl} alt="" onError={(event) => { (event.currentTarget as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23e2e8f0'/%3E%3Ccircle cx='20' cy='16' r='7' fill='%2394a3b8'/%3E%3Cellipse cx='20' cy='32' rx='12' ry='8' fill='%2394a3b8'/%3E%3C/svg%3E"; }} />
         </button>
         <div className="min-w-0">
           <p className="flex items-center gap-1 truncate text-sm font-semibold">
@@ -196,7 +195,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
           <p className="truncate text-xs text-slate-500 dark:text-slate-400">@{author.username} · {formatDate(post.createdAt)}</p>
         </div>
         <span className="ml-auto flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium uppercase text-slate-600 dark:bg-white/10 dark:text-slate-300"><TypeIcon size={12} /> {post.type}</span>
-        <div ref={menuRef} className="relative">
+        <div ref={menuRef} className="relative z-50">
           <button type="button" onClick={(event) => { event.stopPropagation(); setMenuOpen((open) => !open); }} className="grid h-8 w-8 place-items-center rounded-xl opacity-100 hover:bg-slate-100 dark:hover:bg-white/10 sm:opacity-0 sm:group-hover:opacity-100" aria-label="Post options">
             <MoreHorizontal size={17} />
           </button>
@@ -212,7 +211,6 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
               ) : (
                 <>
                   <button onClick={menuAction(() => void sharePost())} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-white/10"><Share2 size={15} /> Share</button>
-                  <button onClick={menuAction(onMute)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-white/10">{muted ? <Volume2 size={15} /> : <VolumeX size={15} />} {muted ? "Unmute" : `Mute @${author.username}`}</button>
                   <button onClick={menuAction(onReport)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-400/10"><ExternalLink size={15} /> Report</button>
                 </>
               )}
@@ -246,7 +244,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
               <Video size={22} />
             </span>
           </div>
-          <button type="button" onClick={action(() => onMute?.())} className="absolute bottom-3 left-3 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Mute video">
+          <button type="button" onClick={(event) => { event.stopPropagation(); }} className="absolute bottom-3 left-3 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Video audio">
             {muted || post.muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>
         </div>
@@ -274,10 +272,10 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
             </button>
           ))}
         </div>
-        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+        <div className="no-double-tap-zoom flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
           <button onClick={action(onLike, "like", liked)} className={`relative flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10 ${liked ? "text-rose-600" : ""} ${pulseAction === "like" ? "like-bounce" : ""}`} aria-label="Like post">
             <Heart size={14} fill={liked ? "currentColor" : "none"} /> {formatCount(post.likesCount)}
-            {delta ? <span className="float-up pointer-events-none absolute -top-4 right-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white shadow-lg">{delta}</span> : null}
+            {delta ? <span className="float-up pointer-events-none absolute -top-4 right-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white shadow-lg" aria-hidden="true">{delta}</span> : null}
           </button>
           <button onClick={action(onComment)} className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-sky-400/10" aria-label="Comment on post">
             <MessageCircle size={14} /> {formatCount(post.commentsCount)}
