@@ -1,4 +1,4 @@
-import { Comment, CommentReaction, Follow, Notification, OGPreview, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, User, UserBlock, UserMute, VerificationRequestStatus } from "../types";
+import { Comment, CommentReaction, Follow, Notification, OGPreview, Post, PostReaction, PostType, ProfileUpdate, SignupProfile, User, UserBlock, UserMute, VerificationRequest, VerificationRequestStatus } from "../types";
 import { supabase } from "./supabase";
 
 type ProfileRow = {
@@ -19,6 +19,8 @@ type ProfileRow = {
   followers_count: number;
   following_count: number;
   verified?: boolean | null;
+  is_admin?: boolean | null;
+  banned?: boolean | null;
   post_streak?: number | null;
   last_post_at?: string | null;
 };
@@ -126,8 +128,32 @@ const toUser = (row: ProfileRow): User => ({
   followersCount: row.followers_count,
   followingCount: row.following_count,
   verified: Boolean(row.verified) || Date.parse(row.created_at) < legacyVerifiedCutoff,
+  isAdmin: Boolean(row.is_admin),
+  banned: Boolean(row.banned),
   postStreak: row.post_streak ?? 0,
   lastPostAt: row.last_post_at || undefined
+});
+
+type VerificationRequestRow = {
+  id: string;
+  user_id: string;
+  username: string;
+  display_name: string;
+  reason?: string | null;
+  status: VerificationRequestStatus;
+  created_at: string;
+  reviewed_at?: string | null;
+};
+
+const toVerificationRequest = (row: VerificationRequestRow): VerificationRequest => ({
+  id: row.id,
+  userId: row.user_id,
+  username: row.username,
+  displayName: row.display_name,
+  reason: row.reason || "",
+  status: row.status,
+  createdAt: row.created_at,
+  reviewedAt: row.reviewed_at || undefined
 });
 
 const toPost = (row: PostRow): Post => ({
@@ -422,6 +448,43 @@ export async function loadVerificationRequestStatus(userId: string): Promise<{ s
     throw error;
   }
   return { status: (data?.status as VerificationRequestStatus | undefined) || "none", reason: data?.reason || "" };
+}
+
+export async function loadAdminDashboardReal() {
+  const client = requireSupabase();
+  const [{ data: users, error: usersError }, { data: requests, error: requestsError }] = await Promise.all([
+    client.rpc("connect_admin_users"),
+    client.rpc("connect_admin_verification_requests")
+  ]);
+  if (usersError) throw usersError;
+  if (requestsError) throw requestsError;
+  return {
+    users: ((users || []) as ProfileRow[]).map(toUser),
+    verificationRequests: ((requests || []) as VerificationRequestRow[]).map(toVerificationRequest)
+  };
+}
+
+export async function adminUpdateUserReal(userId: string, patch: { username?: string; displayName?: string; verified?: boolean; banned?: boolean }) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("connect_admin_update_user", {
+    target_user_id: userId,
+    next_username: patch.username ?? null,
+    next_display_name: patch.displayName ?? null,
+    next_verified: patch.verified ?? null,
+    next_banned: patch.banned ?? null
+  });
+  if (error) throw error;
+  return toUser(data as ProfileRow);
+}
+
+export async function adminReviewVerificationReal(requestId: string, status: "approved" | "rejected") {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("connect_admin_review_verification", {
+    target_request_id: requestId,
+    next_status: status
+  });
+  if (error) throw error;
+  return toVerificationRequest(data as VerificationRequestRow);
 }
 
 export async function sendMagicLink(email: string) {

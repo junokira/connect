@@ -3,6 +3,7 @@ import { FormEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useStat
 import { CanvasFeed } from "./components/CanvasFeed";
 import { ActivityView as NotificationsActivityView } from "./components/ActivityView";
 import { Composer } from "./components/Composer";
+import { AdminDashboard } from "./components/AdminDashboard";
 import { MobileNav } from "./components/MobileNav";
 import { PostCard } from "./components/PostCard";
 import { PostModal } from "./components/PostModal";
@@ -11,7 +12,7 @@ import { Sidebar } from "./components/Sidebar";
 import { VerifiedBadge } from "./components/VerifiedBadge";
 import { supabase } from "./lib/supabase";
 import { useAppStore } from "./store/useAppStore";
-import { FeedScope, FeedStyle, SortMode, User } from "./types";
+import { FeedScope, FeedStyle, Post, SortMode, User } from "./types";
 import { playNotification, unlockAudio } from "./utils/audio";
 import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y } from "./utils/canvasLayout";
 import { getYoutubeThumbnail } from "./utils/media";
@@ -188,6 +189,47 @@ function AuthGate() {
           </div>
         </div>
       </form>
+    </main>
+  );
+}
+
+function PublicSharedView({ post, author, profile, onSignIn }: { post?: Post; author?: User; profile?: User; onSignIn: () => void }) {
+  return (
+    <main className="min-h-[100dvh] bg-[#f5f5f7] p-4 text-slate-950 dark:bg-[#050505] dark:text-white">
+      <div className="mx-auto max-w-xl py-8">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-xl font-black">CONNECT</p>
+            <p className="text-sm text-slate-500">Shared from AWAKEN CULT</p>
+          </div>
+          <button onClick={onSignIn} className="rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">Sign in</button>
+        </div>
+        {profile ? (
+          <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-glass dark:border-white/10 dark:bg-[#111113]">
+            <img className="aspect-[3/1] w-full object-cover" src={profile.bannerUrl} alt="" />
+            <div className="p-5">
+              <img className="-mt-16 h-24 w-24 rounded-full border-4 border-white bg-white object-cover shadow-xl dark:border-[#111113] dark:bg-[#111113]" src={profile.avatarUrl} alt="" />
+              <h1 className="mt-3 flex items-center gap-2 text-2xl font-black">{profile.displayName}<VerifiedBadge verified={profile.verified} size={21} /></h1>
+              <p className="text-slate-500">@{profile.username}</p>
+              {profile.bio ? <p className="mt-3 whitespace-pre-wrap leading-7 text-slate-700 dark:text-slate-200">{profile.bio}</p> : null}
+            </div>
+          </section>
+        ) : null}
+        {post && author ? (
+          <PostCard
+            post={post}
+            author={author}
+            onOpen={() => undefined}
+            onProfile={() => undefined}
+            onLike={() => undefined}
+            onComment={() => undefined}
+            onRepost={() => undefined}
+            onBookmark={() => undefined}
+            widthClass="w-full"
+          />
+        ) : null}
+        {!profile && !post ? <p className="rounded-3xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500 dark:border-white/15 dark:bg-[#111113]">This shared link is loading or no longer exists.</p> : null}
+      </div>
     </main>
   );
 }
@@ -541,6 +583,7 @@ export default function App() {
   const [canvasOverviewSignal, setCanvasOverviewSignal] = useState(0);
   const [editingPostId, setEditingPostId] = useState<string | undefined>();
   const [profileCanvasFullscreen, setProfileCanvasFullscreen] = useState(false);
+  const [dashboardOpen, setDashboardOpen] = useState(false);
   const [refreshPull, setRefreshPull] = useState(0);
   const [refreshingPull, setRefreshingPull] = useState(false);
   const refreshTimer = useRef<number | undefined>(undefined);
@@ -550,19 +593,6 @@ export default function App() {
   useEffect(() => {
     void initialize();
   }, [initialize]);
-
-  useEffect(() => {
-    const syncFromUrl = () => {
-      const params = new URLSearchParams(window.location.search);
-      const postParam = params.get("post");
-      const profileParam = params.get("profile");
-      if (postParam) setActivePost(postParam);
-      if (profileParam) setActiveProfile(profileParam);
-    };
-    syncFromUrl();
-    window.addEventListener("popstate", syncFromUrl);
-    return () => window.removeEventListener("popstate", syncFromUrl);
-  }, [setActivePost, setActiveProfile]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -621,7 +651,46 @@ export default function App() {
   const activePost = posts.find((post) => post.id === activePostId);
   const activeAuthor = activePost ? users.find((user) => user.id === activePost.authorId) : undefined;
   const activeProfile = users.find((user) => user.id === activeProfileId);
+  const isAdmin = Boolean(currentUser?.isAdmin && currentUser.username.toLowerCase() === "anti" && !currentUser.banned);
   const latest = [...canvasPosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const { pathname, search: urlSearch } = window.location;
+      const params = new URLSearchParams(urlSearch);
+      const postParam = params.get("post") || pathname.match(/^\/post\/([^/]+)/)?.[1];
+      const profileParam = params.get("profile");
+      const usernameParam = pathname.match(/^\/u\/([^/]+)/)?.[1];
+      const dashboard = pathname === "/dashboard";
+      setDashboardOpen(dashboard);
+      if (dashboard) {
+        setActivePost(undefined);
+        setActiveProfile(undefined);
+        return;
+      }
+      if (postParam) {
+        setActiveProfile(undefined);
+        setActivePost(decodeURIComponent(postParam));
+        return;
+      }
+      if (usernameParam) {
+        const profile = users.find((user) => user.username.toLowerCase() === decodeURIComponent(usernameParam).toLowerCase());
+        setActivePost(undefined);
+        if (profile) setActiveProfile(profile.id);
+        return;
+      }
+      if (profileParam) {
+        setActivePost(undefined);
+        setActiveProfile(profileParam);
+        return;
+      }
+      setActivePost(undefined);
+      setActiveProfile(undefined);
+    };
+    syncFromUrl();
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, [setActivePost, setActiveProfile, users]);
   useEffect(() => {
     const setMeta = (attribute: "name" | "property", key: string, value: string) => {
       let element = document.head.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
@@ -644,9 +713,9 @@ export default function App() {
         : "Explore AWAKEN CULT's spatial social world.";
     const image = activePost?.imageUrl || activePost?.thumbnailUrl || activePost?.sourceThumb || activeProfile?.bannerUrl || activeProfile?.avatarUrl || "";
     const url = activePost
-      ? `${window.location.origin}?post=${activePost.id}`
+      ? `${window.location.origin}/post/${encodeURIComponent(activePost.id)}`
       : activeProfile
-        ? `${window.location.origin}?profile=${activeProfile.id}`
+        ? `${window.location.origin}/u/${encodeURIComponent(activeProfile.username)}`
         : `${window.location.origin}/`;
     document.title = title;
     setMeta("name", "description", description);
@@ -693,12 +762,13 @@ export default function App() {
   }, []);
   const openPost = useCallback((id?: string) => {
     setActivePost(id);
-    if (id) window.history.pushState({}, "", `?post=${id}`);
+    if (id) window.history.pushState({}, "", `/post/${encodeURIComponent(id)}`);
   }, [setActivePost]);
   const openProfile = useCallback((id?: string) => {
     setActiveProfile(id);
-    if (id) window.history.pushState({}, "", `?profile=${id}`);
-  }, [setActiveProfile]);
+    const profile = users.find((user) => user.id === id);
+    if (id) window.history.pushState({}, "", profile ? `/u/${encodeURIComponent(profile.username)}` : `?profile=${id}`);
+  }, [setActiveProfile, users]);
   const closePost = useCallback(() => {
     setEditingPostId(undefined);
     setActivePost(undefined);
@@ -709,7 +779,7 @@ export default function App() {
     window.history.pushState({}, "", "/");
   }, [setActiveProfile]);
   const shareProfile = useCallback(async (profile: User) => {
-    const url = `${window.location.origin}?profile=${profile.id}`;
+    const url = `${window.location.origin}/u/${encodeURIComponent(profile.username)}`;
     const title = `${profile.displayName} (@${profile.username}) on CONNECT`;
     const text = profile.verified ? `Verified CONNECT profile: @${profile.username}` : `CONNECT profile: @${profile.username}`;
     try {
@@ -736,13 +806,14 @@ export default function App() {
     }
   }, [refreshData, refreshingPull]);
   const handlePullStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    if (activeView === "canvas" && !activeProfile) return;
     if (event.touches.length !== 1) return;
     const target = event.target as HTMLElement;
     if (target.closest(".canvas-viewport,[role='dialog'],input,textarea,select,button,a,iframe,video")) return;
     const scrollParent = target.closest<HTMLElement>(".thin-scrollbar, [data-scroll-root='profile']");
     const atTop = !scrollParent || scrollParent.scrollTop <= 2;
     pullRef.current = { y: event.touches[0].clientY, active: atTop };
-  }, []);
+  }, [activeProfile, activeView]);
   const handlePullMove = useCallback((event: TouchEvent<HTMLDivElement>) => {
     const start = pullRef.current;
     if (!start?.active || refreshingPull) return;
@@ -781,7 +852,12 @@ export default function App() {
     );
   }
 
-  if (!authed || !currentUser) return <AuthGate />;
+  if (!authed || !currentUser) {
+    if (activePost || activeProfile) {
+      return <PublicSharedView post={activePost} author={activeAuthor} profile={activeProfile} onSignIn={() => { setActivePost(undefined); setActiveProfile(undefined); window.history.pushState({}, "", "/"); }} />;
+    }
+    return <AuthGate />;
+  }
 
   return (
     <div
@@ -857,6 +933,12 @@ export default function App() {
             onPinPost={(id) => void pinPost(id)}
             recenterSignal={canvasRecenterSignal}
             overviewSignal={canvasOverviewSignal}
+            adminMode={isAdmin}
+            onOpenDashboard={() => {
+              if (!isAdmin) return;
+              setDashboardOpen(true);
+              window.history.pushState({}, "", "/dashboard");
+            }}
           />
         ) : activeView === "explore" ? (
           <ExploreView posts={filteredPosts} users={users} reactionState={reactionState} onOpenPost={openPost} onOpenProfile={openProfile} onLikePost={(id) => void likePost(id)} onRepostPost={(id) => void repostPost(id)} onBookmarkPost={(id) => void bookmarkPost(id)} />
@@ -955,6 +1037,15 @@ export default function App() {
         onReportUser={(id) => void reportUser(id, "other")}
         onCanvasFullscreenChange={setProfileCanvasFullscreen}
       />
+      {dashboardOpen ? (
+        <AdminDashboard
+          currentUser={currentUser}
+          onClose={() => {
+            setDashboardOpen(false);
+            window.history.pushState({}, "", "/");
+          }}
+        />
+      ) : null}
     </div>
   );
 }

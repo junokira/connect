@@ -68,7 +68,7 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
 
   if (!post || !author) return null;
   const text = post.type === "text" || post.type === "link" ? post.content : post.caption;
-  const postUrl = `${window.location.origin}?post=${post.id}`;
+  const postUrl = `${window.location.origin}/post/${encodeURIComponent(post.id)}`;
   const videoUrl = post.videoUrl ? normalizeExternalUrl(post.videoUrl) : "";
   const embedUrl = getVideoEmbedUrl(videoUrl);
   const sourceEmbedUrl = post.sourceUrl ? getVideoEmbedUrl(post.sourceUrl) : "";

@@ -1,5 +1,5 @@
 import { BadgeCheck, Bookmark, CalendarDays, Heart, ImagePlus, Link as LinkIcon, Loader2, MapPin, Maximize2, Menu, Minimize2, Pencil, Repeat2, Settings, Share2, Shield, Upload, X } from "lucide-react";
-import { FormEvent, MouseEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, MouseEvent, TouchEvent, WheelEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasView, Follow, Post, PostReaction, ProfileUpdate, User, UserBlock, UserMute, VerificationRequestStatus } from "../types";
 import { normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
@@ -411,7 +411,7 @@ function FullscreenMedia({ src, label, shape, onClose }: { src: string; label: s
   );
 }
 
-export function ProfileView({ user, currentUserId, currentUserEmail, verificationStatus, verificationReason, users, posts, reactions, follows, blocks = [], mutes, onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onShareProfile, onBlockUser, onUnblockUser, onReportUser, onCanvasFullscreenChange }: Props) {
+export function ProfileView({ user, currentUserId, currentUserEmail, verificationStatus, verificationReason, users, posts, reactions, follows, blocks = [], mutes = [], onClose, onOpenProfile, onOpenPost, onLikePost, onRepostPost, onBookmarkPost, onFollowUser, onUpdateProfile, onUpdatePassword, onUpdateEmail, onRequestVerification, onShareProfile, onBlockUser, onUnblockUser, onReportUser, onCanvasFullscreenChange }: Props) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("Canvas");
   const [editing, setEditing] = useState(false);
   const [viewer, setViewer] = useState<{ src: string; label: string; shape: "avatar" | "banner" } | undefined>();
@@ -420,7 +420,9 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   const [safetyMenuOpen, setSafetyMenuOpen] = useState(false);
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
-  const [profileCanvasView, setProfileCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.95 });
+  const [embeddedCanvasView, setEmbeddedCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.95 });
+  const [fullscreenCanvasView, setFullscreenCanvasView] = useState<CanvasView>({ x: 0, y: 0, zoom: 0.95 });
+  const embeddedCanvasViewRef = useRef(embeddedCanvasView);
   const touchStartRef = useRef<{ x: number; y: number; canClose: boolean } | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
@@ -466,7 +468,21 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0, behavior: "auto" });
     setActiveTab("Canvas");
+    setEmbeddedCanvasView({ x: 0, y: 0, zoom: 0.95 });
+    setFullscreenCanvasView({ x: 0, y: 0, zoom: 0.95 });
   }, [user?.id]);
+
+  useEffect(() => {
+    if (canvasFullscreen) {
+      setFullscreenCanvasView(embeddedCanvasViewRef.current);
+      return;
+    }
+    setEmbeddedCanvasView({ x: 0, y: 0, zoom: 0.95 });
+  }, [canvasFullscreen]);
+
+  useEffect(() => {
+    embeddedCanvasViewRef.current = embeddedCanvasView;
+  }, [embeddedCanvasView]);
 
   const profileData = useMemo(() => {
     if (!user) return { userPosts: [], mediaPosts: [], likedPosts: [], bookmarkedPosts: [], repostedPosts: [], pinned: undefined };
@@ -525,6 +541,12 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   };
   const shareProfile = () => {
     onShareProfile?.(user);
+  };
+  const passPreviewWheelToPage = (event: WheelEvent<HTMLDivElement>) => {
+    if (canvasFullscreen) return;
+    if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+    event.preventDefault();
+    scrollerRef.current?.scrollBy({ top: event.deltaY, behavior: "auto" });
   };
 
   return (
@@ -678,7 +700,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
                   <X size={18} />
                 </button>
               ) : null}
-              {!verificationOpen ? <button
+              {!verificationOpen && !networkList ? <button
                 onMouseDown={canvasFullscreen ? stopFullscreenControlEvent : undefined}
                 onTouchStart={canvasFullscreen ? stopFullscreenControlEvent : undefined}
                 onClick={(event) => {
@@ -688,6 +710,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
                     setCanvasFullscreen(false);
                     return;
                   }
+                  setFullscreenCanvasView(embeddedCanvasView);
                   setCanvasFullscreen(true);
                 }}
                 className={`pointer-events-auto absolute z-[81] flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 ${canvasFullscreen ? "right-3 top-[calc(env(safe-area-inset-top)+12px)]" : "left-1/2 top-3 -translate-x-1/2"}`}
@@ -696,7 +719,9 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
                 {canvasFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 <span>{canvasFullscreen ? "Minimize" : "Open canvas"}</span>
               </button> : null}
-              <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="gallery" view={profileCanvasView} onViewChange={setProfileCanvasView} onOpenPost={(id) => { setCanvasFullscreen(false); onOpenPost(id); }} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" interactionMode={canvasFullscreen ? "full" : "horizontal"} showControls={canvasFullscreen} />
+              <div className="h-full" onWheel={passPreviewWheelToPage}>
+                <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="gallery" view={canvasFullscreen ? fullscreenCanvasView : embeddedCanvasView} onViewChange={canvasFullscreen ? setFullscreenCanvasView : setEmbeddedCanvasView} onOpenPost={(id) => { setCanvasFullscreen(false); onOpenPost(id); }} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" interactionMode={canvasFullscreen ? "full" : "horizontal"} showControls={canvasFullscreen} />
+              </div>
             </div>
           ) : activeTab === "Media" ? (
             <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-3">

@@ -108,7 +108,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
     handler?.();
   };
   const sharePost = async () => {
-    const url = `${window.location.origin}?post=${post.id}`;
+    const url = `${window.location.origin}/post/${encodeURIComponent(post.id)}`;
     const title = `CONNECT post by ${author.displayName}`;
     try {
       if (navigator.share) {

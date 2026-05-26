@@ -1,4 +1,4 @@
-import { LocateFixed } from "lucide-react";
+import { LocateFixed, Shield } from "lucide-react";
 import { PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CanvasView, FeedStyle, Post, PostReaction, SortMode, User, UserBlock, UserMute } from "../types";
 import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y, CANVAS_CARD_HEIGHT, CANVAS_CARD_WIDTH, resolveCanvasCollisions } from "../utils/canvasLayout";
@@ -32,6 +32,8 @@ type Props = {
   interactive?: boolean;
   interactionMode?: "full" | "horizontal" | "none";
   showControls?: boolean;
+  adminMode?: boolean;
+  onOpenDashboard?: () => void;
 };
 
 const clampZoom = (zoom: number) => Math.max(0.35, Math.min(2.2, zoom));
@@ -85,7 +87,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: topic + column * 214 - 428, y: (day % 9) * 28 + row * 268 - 190 };
 };
 
-export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0, overviewSignal = 0, interactive = true, interactionMode, showControls = true }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0, overviewSignal = 0, interactive = true, interactionMode, showControls = true, adminMode = false, onOpenDashboard }: Props) {
   const mode = interactionMode || (interactive ? "full" : "none");
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
@@ -377,13 +379,17 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
       {showControls ? <button
         onClick={(event) => {
           event.stopPropagation();
+          if (adminMode) {
+            onOpenDashboard?.();
+            return;
+          }
           centerLatest();
         }}
         className="absolute left-4 top-4 z-20 flex h-11 items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 dark:border-white/10 dark:bg-[#111113]/88 dark:focus-visible:ring-white"
-        aria-label="Jump to latest posts"
+        aria-label={adminMode ? "Open creator dashboard" : "Jump to latest posts"}
       >
-        <LocateFixed size={17} />
-        <span className="hidden sm:inline">Latest</span>
+        {adminMode ? <Shield size={17} /> : <LocateFixed size={17} />}
+        <span className="hidden sm:inline">{adminMode ? "Dashboard" : "Latest"}</span>
       </button> : null}
       {visibleSourcePosts.length && !visiblePosts.length ? (
         <div className="absolute left-1/2 top-24 z-20 w-[min(90vw,360px)] -translate-x-1/2 rounded-3xl border border-amber-200 bg-white/92 p-4 text-center text-sm shadow-glass backdrop-blur-xl dark:border-amber-300/20 dark:bg-[#111113]/92">

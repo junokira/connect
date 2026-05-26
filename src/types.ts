@@ -32,6 +32,8 @@ export type User = {
   followersCount: number;
   followingCount: number;
   verified: boolean;
+  isAdmin: boolean;
+  banned: boolean;
   postStreak: number;
   lastPostAt?: string;
 };
@@ -146,6 +148,17 @@ export type UserMute = {
 };
 
 export type VerificationRequestStatus = "none" | "pending" | "approved" | "rejected";
+
+export type VerificationRequest = {
+  id: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  reason: string;
+  status: VerificationRequestStatus;
+  createdAt: string;
+  reviewedAt?: string;
+};
 
 export type OGPreview = {
   url: string;

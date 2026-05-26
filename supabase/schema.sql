@@ -589,3 +589,201 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.notifications;
 exception when duplicate_object then null; end $$;
+
+-- Admin hardening and dashboard RPCs.
+-- Keep sensitive profile flags database-owned; normal profile edits must not be
+-- able to grant admin, verification, or ban state.
+create or replace function public.connect_is_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and is_admin = true
+      and banned = false
+  );
+$$;
+
+revoke execute on function public.connect_is_admin() from anon;
+grant execute on function public.connect_is_admin() to authenticated;
+
+create or replace function public.protect_profile_sensitive_flags()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if auth.uid() is not null and not public.connect_is_admin() then
+      new.is_admin := false;
+      new.verified := false;
+      new.banned := false;
+    end if;
+    return new;
+  end if;
+
+  if auth.uid() is not null and not public.connect_is_admin() then
+    new.is_admin := old.is_admin;
+    new.verified := old.verified;
+    new.banned := old.banned;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_profile_sensitive_flags_trigger on public.profiles;
+create trigger protect_profile_sensitive_flags_trigger
+  before insert or update on public.profiles
+  for each row execute function public.protect_profile_sensitive_flags();
+
+drop policy if exists "admins update profiles" on public.profiles;
+create policy "admins update profiles" on public.profiles
+  for update using (public.connect_is_admin())
+  with check (public.connect_is_admin());
+
+drop policy if exists "admins read verification requests" on public.verification_requests;
+create policy "admins read verification requests" on public.verification_requests
+  for select using (public.connect_is_admin() or auth.uid() = user_id);
+
+drop policy if exists "admins update verification requests" on public.verification_requests;
+create policy "admins update verification requests" on public.verification_requests
+  for update using (public.connect_is_admin())
+  with check (public.connect_is_admin());
+
+create or replace function public.connect_admin_users()
+returns setof public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.connect_is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  return query
+  select *
+  from public.profiles
+  order by created_at desc;
+end;
+$$;
+
+revoke execute on function public.connect_admin_users() from anon;
+grant execute on function public.connect_admin_users() to authenticated;
+
+create or replace function public.connect_admin_verification_requests()
+returns setof public.verification_requests
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.connect_is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  return query
+  select *
+  from public.verification_requests
+  order by created_at desc;
+end;
+$$;
+
+revoke execute on function public.connect_admin_verification_requests() from anon;
+grant execute on function public.connect_admin_verification_requests() to authenticated;
+
+create or replace function public.connect_admin_update_user(
+  target_user_id uuid,
+  next_username text default null,
+  next_display_name text default null,
+  next_verified boolean default null,
+  next_banned boolean default null
+)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_profile public.profiles;
+  clean_username text;
+begin
+  if not public.connect_is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  if target_user_id is null then
+    raise exception 'Target user is required';
+  end if;
+
+  if next_username is not null and trim(next_username) <> '' then
+    clean_username := public.available_connect_username(next_username, target_user_id);
+  end if;
+
+  update public.profiles
+  set
+    username = coalesce(clean_username, username),
+    display_name = coalesce(nullif(trim(next_display_name), ''), display_name),
+    verified = coalesce(next_verified, verified),
+    banned = coalesce(next_banned, banned)
+  where id = target_user_id
+  returning * into updated_profile;
+
+  if updated_profile.id is null then
+    raise exception 'User not found';
+  end if;
+
+  return updated_profile;
+end;
+$$;
+
+revoke execute on function public.connect_admin_update_user(uuid, text, text, boolean, boolean) from anon;
+grant execute on function public.connect_admin_update_user(uuid, text, text, boolean, boolean) to authenticated;
+
+create or replace function public.connect_admin_review_verification(target_request_id uuid, next_status text)
+returns public.verification_requests
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  reviewed public.verification_requests;
+begin
+  if not public.connect_is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  if next_status not in ('approved', 'rejected') then
+    raise exception 'Unsupported verification status';
+  end if;
+
+  update public.verification_requests
+  set status = next_status, reviewed_at = now()
+  where id = target_request_id
+  returning * into reviewed;
+
+  if reviewed.id is null then
+    raise exception 'Verification request not found';
+  end if;
+
+  if next_status = 'approved' then
+    update public.profiles set verified = true where id = reviewed.user_id;
+  end if;
+
+  return reviewed;
+end;
+$$;
+
+revoke execute on function public.connect_admin_review_verification(uuid, text) from anon;
+grant execute on function public.connect_admin_review_verification(uuid, text) to authenticated;
+
+-- Bootstrap the current CONNECT owner. The unique username prevents future
+-- impostors from acquiring this role by renaming themselves.
+update public.profiles
+set is_admin = true, verified = true
+where lower(username) = 'anti';
