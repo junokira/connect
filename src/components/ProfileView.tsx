@@ -40,7 +40,6 @@ type Props = {
 };
 
 type ProfileTab = "Canvas" | "Posts" | "Media" | "Likes" | "Saved" | "Reposts";
-const tabs: ProfileTab[] = ["Canvas", "Posts", "Media", "Likes", "Saved"];
 
 function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePassword, onUpdateEmail, onRequestVerification }: { user: User; currentEmail: string; onClose: () => void; onSave: (profile: ProfileUpdate) => Promise<void>; onUpdatePassword: (password: string) => Promise<void>; onUpdateEmail: (email: string) => Promise<{ email: string; pendingEmail: string }>; onRequestVerification: (reason?: string) => Promise<void> }) {
   const [form, setForm] = useState<ProfileUpdate>({
@@ -473,10 +472,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   }, [user?.id]);
 
   useEffect(() => {
-    if (canvasFullscreen) {
-      setFullscreenCanvasView(embeddedCanvasViewRef.current);
-      return;
-    }
+    if (canvasFullscreen) return;
     setEmbeddedCanvasView({ x: 0, y: 0, zoom: 0.95 });
   }, [canvasFullscreen]);
 
@@ -516,6 +512,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
         activeTab === "Saved" && isOwnProfile ? profileData.bookmarkedPosts :
           activeTab === "Reposts" ? profileData.repostedPosts :
             profileData.userPosts;
+  const visibleTabs: ProfileTab[] = isOwnProfile ? ["Canvas", "Posts", "Media", "Likes", "Saved"] : ["Canvas", "Posts", "Media", "Likes"];
   const websiteUrl = user.website ? normalizeExternalUrl(user.website) : "";
   const featuredUrl = user.featuredLink ? normalizeExternalUrl(user.featuredLink) : "";
   const hasFeatured = Boolean(user.featuredTitle || user.featuredDescription || user.featuredLink || user.featuredBannerUrl || user.featuredCoverUrl);
@@ -538,6 +535,22 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   };
   const stopFullscreenControlEvent = (event: MouseEvent | TouchEvent) => {
     event.stopPropagation();
+  };
+  const openCanvasFullscreen = (event?: MouseEvent<HTMLButtonElement> | TouchEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    setMenuOpen(false);
+    setSafetyMenuOpen(false);
+    setVerificationOpen(false);
+    setFullscreenCanvasView({ x: 0, y: 0, zoom: 0.95 });
+    setCanvasFullscreen(true);
+  };
+  const closeCanvasFullscreen = (event?: MouseEvent<HTMLButtonElement> | TouchEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    setCanvasFullscreen(false);
+    setFullscreenCanvasView({ x: 0, y: 0, zoom: 0.95 });
+    setEmbeddedCanvasView({ x: 0, y: 0, zoom: 0.95 });
   };
   const shareProfile = () => {
     onShareProfile?.(user);
@@ -652,8 +665,8 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
           </div>
         </section>
 
-        <div className="grid grid-cols-5 border-y border-slate-200 text-center text-sm font-semibold dark:border-white/10">
-          {tabs.map((tab) => (
+        <div className={`grid ${isOwnProfile ? "grid-cols-5" : "grid-cols-4"} border-y border-slate-200 text-center text-sm font-semibold dark:border-white/10`}>
+          {visibleTabs.map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-4 hover:bg-slate-100 dark:hover:bg-white/10 ${activeTab === tab ? "border-b-2 border-slate-950 dark:border-white" : "text-slate-500"}`}>{tab}</button>
           ))}
         </div>
@@ -690,11 +703,9 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
                   onMouseDown={stopFullscreenControlEvent}
                   onTouchStart={stopFullscreenControlEvent}
                   onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setCanvasFullscreen(false);
+                    closeCanvasFullscreen(event);
                   }}
-                  className="pointer-events-auto absolute left-3 top-[calc(env(safe-area-inset-top)+12px)] z-[81] grid h-12 w-12 place-items-center rounded-2xl border border-slate-200 bg-white/88 text-slate-950 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 dark:text-white"
+                  className="pointer-events-auto absolute right-3 top-[calc(env(safe-area-inset-top)+12px)] z-[81] grid h-12 w-12 place-items-center rounded-2xl border border-slate-200 bg-white/88 text-slate-950 shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 dark:text-white"
                   aria-label="Close fullscreen canvas"
                 >
                   <X size={18} />
@@ -705,22 +716,19 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
                 onTouchStart={canvasFullscreen ? stopFullscreenControlEvent : undefined}
                 onClick={(event) => {
                   if (canvasFullscreen) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setCanvasFullscreen(false);
+                    closeCanvasFullscreen(event);
                     return;
                   }
-                  setFullscreenCanvasView(embeddedCanvasView);
-                  setCanvasFullscreen(true);
+                  openCanvasFullscreen(event);
                 }}
-                className={`pointer-events-auto absolute z-[81] flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 ${canvasFullscreen ? "right-3 top-[calc(env(safe-area-inset-top)+12px)]" : "left-1/2 top-3 -translate-x-1/2"}`}
+                className={`pointer-events-auto absolute z-[81] flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur dark:border-white/10 dark:bg-slate-950/88 ${canvasFullscreen ? "left-3 top-[calc(env(safe-area-inset-top)+12px)]" : "left-1/2 top-3 -translate-x-1/2"}`}
                 aria-label={canvasFullscreen ? "Minimize profile canvas" : "Open profile canvas fullscreen"}
               >
                 {canvasFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 <span>{canvasFullscreen ? "Minimize" : "Open canvas"}</span>
               </button> : null}
               <div className="h-full" onWheel={passPreviewWheelToPage}>
-                <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="gallery" view={canvasFullscreen ? fullscreenCanvasView : embeddedCanvasView} onViewChange={canvasFullscreen ? setFullscreenCanvasView : setEmbeddedCanvasView} onOpenPost={(id) => { setCanvasFullscreen(false); onOpenPost(id); }} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" interactionMode={canvasFullscreen ? "full" : "horizontal"} showControls={canvasFullscreen} />
+                <CanvasFeed posts={profileData.userPosts} users={users} reactions={reactions} currentUserId={currentUserId} sortMode="newest" feedStyle="gallery" view={canvasFullscreen ? fullscreenCanvasView : embeddedCanvasView} onViewChange={canvasFullscreen ? setFullscreenCanvasView : setEmbeddedCanvasView} onOpenPost={(id) => { closeCanvasFullscreen(); onOpenPost(id); }} onOpenProfile={onOpenProfile} onLikePost={onLikePost} onRepostPost={onRepostPost} onBookmarkPost={onBookmarkPost} blocks={blocks} mutes={mutes} className="h-full min-h-full" interactionMode={canvasFullscreen ? "full" : "horizontal"} showControls={canvasFullscreen} controlsClassName="left-1/2 top-[calc(env(safe-area-inset-top)+12px)] -translate-x-1/2" />
               </div>
             </div>
           ) : activeTab === "Media" ? (

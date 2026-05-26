@@ -74,7 +74,6 @@ function AuthGate() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
-  const [bannerUrl, setBannerUrl] = useState("");
   const [status, setStatus] = useState("");
 
   const submit = (event: FormEvent) => {
@@ -92,7 +91,7 @@ function AuthGate() {
         location: "",
         website: "",
         avatarUrl: undefined,
-        bannerUrl
+        bannerUrl: undefined
       });
       if (!signedIn) setStatus("Confirmation email sent. Open it on this device or browser, then CONNECT will finish signing you in.");
     })();
@@ -151,8 +150,6 @@ function AuthGate() {
             </div>
             <label className="mb-2 block text-sm font-semibold">Bio</label>
             <textarea value={bio} onChange={(event) => setBio(event.target.value)} className="mb-4 min-h-20 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="A little about you" />
-            <label className="mb-2 block text-sm font-semibold">Banner URL</label>
-            <input value={bannerUrl} onChange={(event) => setBannerUrl(event.target.value)} className="mb-4 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none focus:border-teal-500 dark:border-white/10" placeholder="Optional" />
           </>
         ) : null}
         <label className="mb-2 block text-sm font-semibold">Email</label>
@@ -403,9 +400,9 @@ function SearchView({
           </section>
         ) : null}
         {posts.length ? <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Posts</h2> : null}
-        <div className="grid justify-items-center gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} author={users.find((user) => user.id === post.authorId) || users[0]} {...reactionState(post.id)} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(post.authorId)} onLike={() => onLikePost(post.id)} onComment={() => onOpenPost(post.id)} onRepost={() => onRepostPost(post.id)} onBookmark={() => onBookmarkPost(post.id)} />
+            <PostCard key={post.id} post={post} author={users.find((user) => user.id === post.authorId) || users[0]} widthClass="w-full" {...reactionState(post.id)} onOpen={() => onOpenPost(post.id)} onProfile={() => onOpenProfile(post.authorId)} onLike={() => onLikePost(post.id)} onComment={() => onOpenPost(post.id)} onRepost={() => onRepostPost(post.id)} onBookmark={() => onBookmarkPost(post.id)} />
           ))}
           {!hasResults ? <p className="rounded-3xl border border-dashed border-slate-300 p-8 text-sm text-slate-500 dark:border-white/15">{hasSearch ? "No posts or profiles match that search yet." : "Search posts, captions, usernames, display names, hashtags, and media types."}</p> : null}
         </div>
@@ -781,7 +778,7 @@ export default function App() {
   const shareProfile = useCallback(async (profile: User) => {
     const url = `${window.location.origin}/u/${encodeURIComponent(profile.username)}`;
     const title = `${profile.displayName} (@${profile.username}) on CONNECT`;
-    const text = profile.verified ? `Verified CONNECT profile: @${profile.username}` : `CONNECT profile: @${profile.username}`;
+    const text = profile.verified ? `Verified CONNECT profile: @${profile.username}\n${url}` : `CONNECT profile: @${profile.username}\n${url}`;
     try {
       if (navigator.share) {
         await navigator.share({ title, text, url });

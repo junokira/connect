@@ -500,7 +500,7 @@ export async function signInWithProvider(provider: "google" | "apple") {
   const client = requireSupabase();
   const { error } = await client.auth.signInWithOAuth({
     provider,
-    options: { redirectTo: window.location.origin }
+    options: { redirectTo: authRedirectUrl("confirmed") }
   });
   if (error) throw error;
 }

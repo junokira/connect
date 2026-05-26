@@ -32,6 +32,7 @@ type Props = {
   interactive?: boolean;
   interactionMode?: "full" | "horizontal" | "none";
   showControls?: boolean;
+  controlsClassName?: string;
   adminMode?: boolean;
   onOpenDashboard?: () => void;
 };
@@ -87,7 +88,7 @@ const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
   return { x: topic + column * 214 - 428, y: (day % 9) * 28 + row * 268 - 190 };
 };
 
-export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0, overviewSignal = 0, interactive = true, interactionMode, showControls = true, adminMode = false, onOpenDashboard }: Props) {
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onMuteUser, onReportPost, onHashtagClick, onPinPost, className = "h-screen", recenterSignal = 0, overviewSignal = 0, interactive = true, interactionMode, showControls = true, controlsClassName, adminMode = false, onOpenDashboard }: Props) {
   const mode = interactionMode || (interactive ? "full" : "none");
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
@@ -96,6 +97,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   const didDragRef = useRef(false);
   const suppressClickRef = useRef(false);
   const centeredStartupRef = useRef("");
+  const horizontalStartupRef = useRef("");
   const viewRef = useRef(view);
   const frameRef = useRef<number | null>(null);
   const animationRef = useRef<number | null>(null);
@@ -178,8 +180,12 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     if (mode !== "horizontal" || !positionedPosts.length) return nextX;
     const minPostX = Math.min(...positionedPosts.map(({ position }) => position.x));
     const maxPostX = Math.max(...positionedPosts.map(({ position }) => position.x));
+    const contentWidth = maxPostX - minPostX + CANVAS_CARD_WIDTH;
+    if (contentWidth <= size.width - 48) {
+      return -minPostX - size.width / 2 + 28;
+    }
     const leftLimit = -(maxPostX + CANVAS_CARD_WIDTH) + size.width / 2 + 72;
-    const rightLimit = -minPostX - size.width / 2 + 260;
+    const rightLimit = -minPostX - size.width / 2 + 40;
     if (leftLimit > rightLimit) return (leftLimit + rightLimit) / 2;
     return Math.max(leftLimit, Math.min(rightLimit, nextX));
   }, [mode, positionedPosts, size.width]);
@@ -252,6 +258,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   }, [centerLatest, positionedPosts.length, visiblePosts.length]);
 
   useEffect(() => {
+    if (mode === "horizontal") return;
     const latest = [...positionedPosts].sort((a, b) => Date.parse(b.post.createdAt) - Date.parse(a.post.createdAt))[0];
     if (!latest) return;
     const startupKey = `${feedStyle}:${latest.post.id}`;
@@ -259,7 +266,19 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     centeredStartupRef.current = startupKey;
     const frame = requestAnimationFrame(centerLatest);
     return () => cancelAnimationFrame(frame);
-  }, [centerLatest, feedStyle, positionedPosts]);
+  }, [centerLatest, feedStyle, mode, positionedPosts]);
+
+  useEffect(() => {
+    if (mode !== "horizontal" || !positionedPosts.length || !size.width) return;
+    const first = positionedPosts[0];
+    const startupKey = `${first.post.id}:${positionedPosts.length}:${size.width}`;
+    if (horizontalStartupRef.current === startupKey) return;
+    horizontalStartupRef.current = startupKey;
+    const targetX = clampHorizontalX(-first.position.x - size.width / 2 + 28);
+    const targetY = -first.position.y - Math.max(82, size.height * 0.24);
+    const frame = requestAnimationFrame(() => scheduleView({ x: targetX, y: targetY, zoom: 0.95 }));
+    return () => cancelAnimationFrame(frame);
+  }, [clampHorizontalX, mode, positionedPosts, scheduleView, size.height, size.width]);
 
   useEffect(() => {
     if (!recenterSignal) return;
@@ -385,7 +404,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
           }
           centerLatest();
         }}
-        className="absolute left-4 top-4 z-20 flex h-11 items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 dark:border-white/10 dark:bg-[#111113]/88 dark:focus-visible:ring-white"
+        className={`${controlsClassName || "left-4 top-4"} absolute z-20 flex h-11 items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 dark:border-white/10 dark:bg-[#111113]/88 dark:focus-visible:ring-white`}
         aria-label={adminMode ? "Open creator dashboard" : "Jump to latest posts"}
       >
         {adminMode ? <Shield size={17} /> : <LocateFixed size={17} />}
