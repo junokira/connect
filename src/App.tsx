@@ -607,13 +607,16 @@ export default function App() {
     const color = theme === "dark" ? "#050505" : "#f5f5f7";
     document.documentElement.style.backgroundColor = color;
     document.body.style.backgroundColor = color;
-    let themeMeta = document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-    if (!themeMeta) {
-      themeMeta = document.createElement("meta");
+    const metas = [...document.head.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')];
+    if (!metas.length) {
+      const themeMeta = document.createElement("meta");
       themeMeta.name = "theme-color";
       document.head.appendChild(themeMeta);
+      metas.push(themeMeta);
     }
-    themeMeta.content = color;
+    metas.forEach((themeMeta) => {
+      themeMeta.content = color;
+    });
   }, [theme]);
 
   useEffect(() => {
@@ -669,7 +672,8 @@ export default function App() {
   const activePost = posts.find((post) => post.id === activePostId);
   const activeAuthor = activePost ? users.find((user) => user.id === activePost.authorId) : undefined;
   const activeProfile = users.find((user) => user.id === activeProfileId);
-  const isAdmin = Boolean(currentUser?.isAdmin && currentUser.username.toLowerCase() === "anti" && !currentUser.banned);
+  const isAntiAccount = Boolean(currentUser?.username.toLowerCase() === "anti" && !currentUser.banned);
+  const isAdmin = Boolean(currentUser?.isAdmin && isAntiAccount);
   const latest = [...canvasPosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
 
   useEffect(() => {
@@ -766,14 +770,17 @@ export default function App() {
     setActiveProfile(undefined);
     setActiveView("canvas");
     setCanvasOverviewSignal((value) => value + 1);
+    if (window.location.pathname !== "/") window.history.pushState({}, "", "/");
   }, [setActiveProfile]);
   const openExplore = useCallback(() => {
     setActiveProfile(undefined);
     setActiveView("explore");
+    if (window.location.pathname !== "/") window.history.pushState({}, "", "/");
   }, [setActiveProfile]);
   const openActivity = useCallback(() => {
     setActiveProfile(undefined);
     setActiveView("activity");
+    if (window.location.pathname !== "/") window.history.pushState({}, "", "/");
   }, [setActiveProfile]);
   const openComposer = useCallback(() => {
     setComposerOpen(true);
@@ -815,6 +822,8 @@ export default function App() {
   const runPullRefresh = useCallback(async () => {
     if (refreshingPull || !pullRefreshEnabled) return;
     const refreshView = activeView;
+    setActiveProfile(undefined);
+    if (window.location.pathname !== "/") window.history.replaceState({}, "", "/");
     setRefreshingPull(true);
     setRefreshPull(72);
     try {
@@ -826,7 +835,7 @@ export default function App() {
         setRefreshPull(0);
       }, 420);
     }
-  }, [activeView, pullRefreshEnabled, refreshData, refreshingPull]);
+  }, [activeView, pullRefreshEnabled, refreshData, refreshingPull, setActiveProfile]);
   const handleContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     if (target.closest("input,textarea,select,[contenteditable='true']")) return;
@@ -976,9 +985,9 @@ export default function App() {
             onPinPost={(id) => void pinPost(id)}
             recenterSignal={canvasRecenterSignal}
             overviewSignal={canvasOverviewSignal}
-            adminMode={isAdmin}
+            adminMode={isAdmin || isAntiAccount}
             onOpenDashboard={() => {
-              if (!isAdmin) return;
+              if (!isAdmin && !isAntiAccount) return;
               setDashboardOpen(true);
               window.history.pushState({}, "", "/dashboard");
             }}
@@ -1083,6 +1092,7 @@ export default function App() {
       {dashboardOpen ? (
         <AdminDashboard
           currentUser={currentUser}
+          allowCandidate={isAntiAccount}
           onClose={() => {
             setDashboardOpen(false);
             window.history.pushState({}, "", "/");

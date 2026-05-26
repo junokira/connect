@@ -273,7 +273,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
             </button>
           ))}
         </div>
-        <div className="no-double-tap-zoom flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+        <div className="no-double-tap-zoom grid grid-cols-5 items-center text-xs text-slate-500 dark:text-slate-400">
           <button onClick={action(onLike, "like", liked)} className={`relative flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10 ${liked ? "text-rose-600" : ""} ${pulseAction === "like" ? "like-bounce" : ""}`} aria-label="Like post">
             <Heart size={14} fill={liked ? "currentColor" : "none"} /> {formatCount(post.likesCount)}
             {delta ? <span className="float-up pointer-events-none absolute -top-4 right-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white shadow-lg" aria-hidden="true">{delta}</span> : null}
@@ -286,6 +286,9 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
           </button>
           <button onClick={action(onBookmark, "bookmark", bookmarked)} className={`flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-400/10 ${bookmarked ? "text-amber-600" : ""} ${pulseAction === "bookmark" ? "like-bounce" : ""}`} aria-label="Bookmark post">
             <Bookmark size={14} fill={bookmarked ? "currentColor" : "none"} /> {formatCount(post.bookmarksCount)}
+          </button>
+          <button onClick={(event) => { event.stopPropagation(); void sharePost(); }} className="flex items-center justify-center rounded-lg px-2 py-1 hover:bg-blue-50 hover:text-[#007aff] dark:hover:bg-blue-400/10" aria-label="Share post" title="Share post">
+            <Share2 size={14} />
           </button>
         </div>
       </div>

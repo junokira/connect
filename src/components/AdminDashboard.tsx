@@ -7,10 +7,11 @@ import { VerifiedBadge } from "./VerifiedBadge";
 
 type Props = {
   currentUser?: User;
+  allowCandidate?: boolean;
   onClose: () => void;
 };
 
-export function AdminDashboard({ currentUser, onClose }: Props) {
+export function AdminDashboard({ currentUser, allowCandidate = false, onClose }: Props) {
   const [users, setUsers] = useState<User[]>([]);
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
   const [search, setSearch] = useState("");
@@ -21,7 +22,7 @@ export function AdminDashboard({ currentUser, onClose }: Props) {
   const [editUsername, setEditUsername] = useState("");
   const [editDisplayName, setEditDisplayName] = useState("");
 
-  const isAdmin = Boolean(currentUser?.isAdmin && currentUser.username.toLowerCase() === "anti" && !currentUser.banned);
+  const isAdmin = Boolean((currentUser?.isAdmin || allowCandidate) && currentUser?.username.toLowerCase() === "anti" && !currentUser.banned);
 
   const load = useCallback(async () => {
     if (!isAdmin) {

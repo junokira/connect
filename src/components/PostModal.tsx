@@ -35,7 +35,6 @@ const giphyKey = "dc6zaTOxFJmzC";
 
 export function PostModal({ post, author, currentUserId, comments, commentReactions, users, editMode, onClose, liked, reposted, bookmarked, onLike, onRepost, onBookmark, onDeletePost, onEditPost, onSaveEdit, onLikeComment, onDeleteComment, onAddCommentExtended, onOpenProfile, onHashtagClick }: Props) {
   const [comment, setComment] = useState("");
-  const [shareStatus, setShareStatus] = useState("");
   const [editing, setEditing] = useState(Boolean(editMode));
   const [editText, setEditText] = useState("");
   const [replyingTo, setReplyingTo] = useState<{ commentId: string; authorUsername: string } | undefined>();
@@ -102,10 +101,8 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
         return;
       }
       await navigator.clipboard.writeText(postUrl);
-      setShareStatus("Link copied.");
     } catch {
       await navigator.clipboard?.writeText(postUrl).catch(() => undefined);
-      setShareStatus("Link copied.");
     }
   };
   const openProfile = (id: string) => {
@@ -217,7 +214,6 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
                 <button type="button" onClick={onBookmark} className={`rounded-xl border border-slate-200 p-3 dark:border-white/10 ${bookmarked ? "text-amber-600" : ""}`}><Bookmark className="mx-auto mb-1" size={18} fill={bookmarked ? "currentColor" : "none"} /> <span className="text-xs">{formatCount(post.bookmarksCount)}</span></button>
                 <button type="button" onClick={() => void share()} className="rounded-xl border border-slate-200 p-3 dark:border-white/10"><Share2 className="mx-auto mb-1" size={18} /> <span className="text-xs">Share</span></button>
               </div>
-              {shareStatus ? <p className="mt-3 text-sm font-semibold text-teal-600 dark:text-teal-300">{shareStatus}</p> : null}
             </div>
             <aside className="flex min-h-[320px] flex-col rounded-3xl border border-slate-200 bg-[#f5f5f7] dark:border-white/10 dark:bg-white/[0.04]">
               <div className="border-b border-slate-200 px-4 py-3 dark:border-white/10"><p className="text-sm font-black">Comments</p><p className="text-xs text-slate-500">{formatCount(post.commentsCount)} replies</p></div>

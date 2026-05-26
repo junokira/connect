@@ -526,6 +526,10 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
   const touchStart = (event: TouchEvent) => {
     const touch = event.touches[0];
     const target = event.target as HTMLElement;
+    if (target.closest("[data-network-sheet]")) {
+      touchStartRef.current = null;
+      return;
+    }
     touchStartRef.current = { x: touch.clientX, y: touch.clientY, canClose: !target.closest(".canvas-viewport,button,a,input,textarea,select") && (scrollerRef.current?.scrollTop || 0) <= 8 };
   };
   const touchEnd = (event: TouchEvent) => {
@@ -826,20 +830,31 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
       {verificationOpen ? <VerificationSheet user={user} isOwnProfile={isOwnProfile} status={verificationStatus} reason={verificationReason} onClose={() => setVerificationOpen(false)} onRequestVerification={onRequestVerification} /> : null}
       {viewer ? <FullscreenMedia src={viewer.src} label={viewer.label} shape={viewer.shape} onClose={() => setViewer(undefined)} /> : null}
       {networkList ? (
-        <div onPointerDown={(event) => { if (event.target === event.currentTarget) setNetworkList(undefined); }} className="fixed inset-0 z-[72] grid place-items-end overflow-hidden bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+        <div
+          data-network-sheet
+          onPointerDown={(event) => { if (event.target === event.currentTarget) setNetworkList(undefined); }}
+          onTouchStart={(event) => event.stopPropagation()}
+          onTouchEnd={(event) => event.stopPropagation()}
+          className="fixed inset-0 z-[72] grid place-items-end overflow-hidden bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4"
+        >
           <section
             onPointerDown={(event) => event.stopPropagation()}
-            className="modal-enter modal-scroll-pane flex h-[min(82dvh,620px)] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl"
+            onTouchStart={(event) => event.stopPropagation()}
+            onTouchEnd={(event) => event.stopPropagation()}
+            className="modal-enter modal-scroll-pane flex h-[min(90dvh,720px)] max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-16px)] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white p-4 pb-[max(16px,env(safe-area-inset-bottom))] shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl"
           >
             <div className="mb-4 flex shrink-0 items-center justify-between">
               <p className="text-lg font-black">{networkList === "followers" ? "Followers" : "Following"}</p>
               <button onClick={() => setNetworkList(undefined)} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close network list"><X size={19} /></button>
             </div>
             <div
+              data-network-sheet
               className="thin-scrollbar modal-scroll-pane min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1"
               onWheel={(event) => event.stopPropagation()}
-              onTouchMove={(event) => event.stopPropagation()}
-              style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onTouchStart={(event) => event.stopPropagation()}
+              onTouchEnd={(event) => event.stopPropagation()}
+              style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y", overscrollBehavior: "contain" }}
             >
               {users
                 .filter((candidate) => networkList === "followers"

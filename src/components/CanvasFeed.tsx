@@ -170,7 +170,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
   const positionedPosts = useMemo(() => {
     if (mode === "horizontal") {
       const ordered = [...visibleSourcePosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-      return ordered.map((post, index) => ({ post, position: { x: index * 372 - 120, y: -260 } }));
+      return ordered.map((post, index) => ({ post, position: { x: index * 372 - 120, y: -286 } }));
     }
     return resolveCanvasCollisions(visibleSourcePosts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) })));
   }, [feedStyle, mode, visibleSourcePosts]);
@@ -274,7 +274,7 @@ export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, f
     if (horizontalStartupRef.current === startupKey) return;
     horizontalStartupRef.current = startupKey;
     const targetX = clampHorizontalX(-first.position.x - size.width / 2 + 28);
-    const targetY = -first.position.y - Math.max(136, size.height * 0.35);
+    const targetY = -first.position.y - Math.max(180, size.height * 0.42 + 16);
     const frame = requestAnimationFrame(() => scheduleView({ x: targetX, y: targetY, zoom: 0.95 }));
     return () => cancelAnimationFrame(frame);
   }, [clampHorizontalX, mode, positionedPosts, scheduleView, size.height, size.width]);
