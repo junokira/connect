@@ -1,0 +1,470 @@
+import { LocateFixed, Shield } from "lucide-react";
+import { PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CanvasView, FeedStyle, Post, PostReaction, SortMode, User, UserBlock, UserMute } from "../types";
+import { CANVAS_CARD_CENTER_X, CANVAS_CARD_CENTER_Y, CANVAS_CARD_HEIGHT, CANVAS_CARD_WIDTH, resolveCanvasCollisions } from "../utils/canvasLayout";
+import { PostCard } from "./PostCard";
+
+type Props = {
+  posts: Post[];
+  users: User[];
+  reactions: PostReaction[];
+  currentUserId: string;
+  sortMode: SortMode;
+  feedStyle: FeedStyle;
+  view: CanvasView;
+  onViewChange: (view: CanvasView) => void;
+  onOpenPost: (id: string) => void;
+  onOpenProfile: (id: string) => void;
+  onLikePost: (id: string) => void;
+  onRepostPost: (id: string) => void;
+  onBookmarkPost: (id: string) => void;
+  blocks?: UserBlock[];
+  mutes?: UserMute[];
+  onEditPost?: (id: string) => void;
+  onDeletePost?: (id: string) => void;
+  onReportPost?: (id: string) => void;
+  onHashtagClick?: (tag: string) => void;
+  onPinPost?: (id: string) => void;
+  className?: string;
+  recenterSignal?: number;
+  overviewSignal?: number;
+  interactive?: boolean;
+  interactionMode?: "full" | "horizontal" | "none";
+  showControls?: boolean;
+  controlsClassName?: string;
+  adminMode?: boolean;
+  onOpenDashboard?: () => void;
+};
+
+const clampZoom = (zoom: number) => Math.max(0.35, Math.min(2.2, zoom));
+const hashValue = (value: string) => [...value].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 9973, 17);
+
+const clusterAnchor = (post: Post) => {
+  const tag = post.hashtags[0] || post.authorId || "connect";
+  const hash = hashValue(tag);
+  const angle = (hash % 360) * (Math.PI / 180);
+  const radius = 64 + (hash % 4) * 46;
+  return { x: Math.round(Math.cos(angle) * radius), y: Math.round(Math.sin(angle) * radius) };
+};
+
+const engagementScore = (post: Post) => post.likesCount + post.commentsCount * 2 + post.repostsCount * 3 + post.bookmarksCount;
+
+const getStyledPosition = (post: Post, index: number, style: FeedStyle) => {
+  const anchor = clusterAnchor(post);
+  if (style === "classic") {
+    const ring = Math.floor(index / 8);
+    const slot = index % 8;
+    const angle = slot * 0.785 + ring * 0.28;
+    const radius = ring === 0 ? 56 + slot * 14 : 150 + ring * 92;
+    return { x: anchor.x + Math.round(Math.cos(angle) * radius), y: anchor.y + Math.round(Math.sin(angle) * radius * 0.76) };
+  }
+  if (style === "gallery") {
+    const col = index % 4;
+    const row = Math.floor(index / 4);
+    const stagger = [0, 92, 36, 128][col];
+    const lift = post.type === "text" ? 90 : post.type === "video" ? -20 : 0;
+    return { x: col * 306 - 460, y: row * 316 + stagger - 190 + lift };
+  }
+  if (style === "mosaic") {
+    const columns = [-470, -178, 114, 406];
+    const col = index % columns.length;
+    const row = Math.floor(index / columns.length);
+    const stagger = [0, 76, 26, 112][col];
+    const depth = (engagementScore(post) % 3) * 12;
+    return { x: columns[col] + depth, y: row * 302 + stagger - 190 - depth };
+  }
+  if (style === "orbit") {
+    const ring = Math.floor(index / 10) + 1;
+    const inRing = index % 10;
+    const angle = (inRing / 10) * Math.PI * 2 + ring * 0.22;
+    const radius = 170 + ring * 132;
+    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+  }
+  const day = Math.floor(Date.parse(post.createdAt) / 86_400_000);
+  const topic = anchor.x / 2;
+  const column = index % 5;
+  const row = Math.floor(index / 5);
+  return { x: topic + column * 214 - 428, y: (day % 9) * 28 + row * 268 - 190 };
+};
+
+export function CanvasFeed({ posts, users, reactions, currentUserId, sortMode, feedStyle, view, onViewChange, onOpenPost, onOpenProfile, onLikePost, onRepostPost, onBookmarkPost, blocks = [], mutes = [], onEditPost, onDeletePost, onReportPost, onHashtagClick, onPinPost, className = "h-[100dvh]", recenterSignal = 0, overviewSignal = 0, interactive = true, interactionMode, showControls = true, controlsClassName, adminMode = false, onOpenDashboard }: Props) {
+  const mode = interactionMode || (interactive ? "full" : "none");
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ id: number; x: number; y: number; view: CanvasView; postId?: string } | null>(null);
+  const velocityRef = useRef<{ x: number; y: number; time: number; vx: number }>({ x: 0, y: 0, time: 0, vx: 0 });
+  const panVelocityRef = useRef<{ x: number; y: number; time: number; vx: number; vy: number }>({ x: 0, y: 0, time: 0, vx: 0, vy: 0 });
+  const didDragRef = useRef(false);
+  const suppressClickRef = useRef(false);
+  const centeredStartupRef = useRef("");
+  const horizontalStartupRef = useRef("");
+  const viewRef = useRef(view);
+  const frameRef = useRef<number | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const queuedViewRef = useRef<CanvasView | null>(null);
+  const [size, setSize] = useState({ width: 1400, height: 900 });
+  const touchRef = useRef<{ distance: number; zoom: number } | null>(null);
+
+  const scheduleView = useCallback((nextView: CanvasView) => {
+    queuedViewRef.current = nextView;
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      const queued = queuedViewRef.current;
+      if (!queued) return;
+      queuedViewRef.current = null;
+      viewRef.current = queued;
+      onViewChange(queued);
+    });
+  }, [onViewChange]);
+
+  const animateView = useCallback((target: CanvasView, duration = 420) => {
+    if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
+    const start = viewRef.current;
+    const startTime = performance.now();
+    const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startTime) / duration);
+      const eased = easeOut(progress);
+      const next = {
+        x: start.x + (target.x - start.x) * eased,
+        y: start.y + (target.y - start.y) * eased,
+        zoom: start.zoom + (target.zoom - start.zoom) * eased
+      };
+      scheduleView(next);
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(tick);
+      } else {
+        animationRef.current = null;
+        scheduleView(target);
+      }
+    };
+    animationRef.current = requestAnimationFrame(tick);
+  }, [scheduleView]);
+
+  const updateSize = useCallback(() => {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (rect?.width && rect.height) setSize({ width: rect.width, height: rect.height });
+  }, []);
+
+  useLayoutEffect(() => {
+    updateSize();
+    const firstFrame = requestAnimationFrame(updateSize);
+    const secondFrame = requestAnimationFrame(() => requestAnimationFrame(updateSize));
+    const node = viewportRef.current;
+    const observer = node && "ResizeObserver" in window ? new ResizeObserver(updateSize) : undefined;
+    if (node && observer) observer.observe(node);
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
+      observer?.disconnect();
+    };
+  }, [updateSize]);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  const visibleSourcePosts = useMemo(() => posts.filter((post) => !blocks.some((block) => block.blockedId === post.authorId) && !mutes.some((mute) => mute.mutedId === post.authorId)), [blocks, mutes, posts]);
+
+  const positionedPosts = useMemo(() => {
+    if (mode === "horizontal") {
+      const ordered = [...visibleSourcePosts].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      return ordered.map((post, index) => ({ post, position: { x: index * 372 - 120, y: -286 } }));
+    }
+    return resolveCanvasCollisions(visibleSourcePosts.map((post, index) => ({ post, position: getStyledPosition(post, index, feedStyle) })));
+  }, [feedStyle, mode, visibleSourcePosts]);
+
+  const clampHorizontalX = useCallback((nextX: number) => {
+    if (mode !== "horizontal" || !positionedPosts.length) return nextX;
+    const minPostX = Math.min(...positionedPosts.map(({ position }) => position.x));
+    const maxPostX = Math.max(...positionedPosts.map(({ position }) => position.x));
+    const contentWidth = maxPostX - minPostX + CANVAS_CARD_WIDTH;
+    if (contentWidth <= size.width - 48) {
+      return -minPostX - size.width / 2 + 28;
+    }
+    const leftLimit = -(maxPostX + CANVAS_CARD_WIDTH) + size.width / 2 + 72;
+    const rightLimit = -minPostX - size.width / 2 + 40;
+    if (leftLimit > rightLimit) return (leftLimit + rightLimit) / 2;
+    return Math.max(leftLimit, Math.min(rightLimit, nextX));
+  }, [mode, positionedPosts, size.width]);
+
+  useEffect(() => {
+    const node = viewportRef.current;
+    if (!node || mode === "none") return;
+    if (mode === "horizontal") return;
+
+    const handleWheel = (event: globalThis.WheelEvent) => {
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      event.preventDefault();
+      updateSize();
+      const current = viewRef.current;
+      const rect = node.getBoundingClientRect();
+      const delta = Math.max(-80, Math.min(80, event.deltaY));
+      const nextZoom = clampZoom(current.zoom * (delta > 0 ? 0.93 : 1.07));
+      const mx = event.clientX - rect.left;
+      const my = event.clientY - rect.top;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const worldX = (mx - centerX - current.x) / current.zoom;
+      const worldY = (my - centerY - current.y) / current.zoom;
+      scheduleView({ zoom: nextZoom, x: mx - centerX - worldX * nextZoom, y: my - centerY - worldY * nextZoom });
+    };
+
+    node.addEventListener("wheel", handleWheel, { passive: false });
+    return () => node.removeEventListener("wheel", handleWheel);
+  }, [clampHorizontalX, mode, scheduleView, updateSize]);
+
+  const centerLatest = useCallback(() => {
+    const latest = [...positionedPosts].sort((a, b) => Date.parse(b.post.createdAt) - Date.parse(a.post.createdAt))[0];
+    if (!latest) return;
+    const nextX = -(latest.position.x + CANVAS_CARD_CENTER_X);
+    animateView({ x: mode === "horizontal" ? clampHorizontalX(nextX) : nextX, y: -(latest.position.y + CANVAS_CARD_CENTER_Y), zoom: mode === "horizontal" ? 0.9 : 1.05 }, mode === "horizontal" ? 360 : 520);
+  }, [animateView, clampHorizontalX, mode, positionedPosts]);
+
+  const centerOverview = useCallback(() => {
+    if (!positionedPosts.length) return;
+    const minX = Math.min(...positionedPosts.map(({ position }) => position.x));
+    const maxX = Math.max(...positionedPosts.map(({ position }) => position.x + CANVAS_CARD_WIDTH));
+    const minY = Math.min(...positionedPosts.map(({ position }) => position.y));
+    const maxY = Math.max(...positionedPosts.map(({ position }) => position.y + CANVAS_CARD_HEIGHT));
+    const contentWidth = Math.max(CANVAS_CARD_WIDTH, maxX - minX);
+    const contentHeight = Math.max(CANVAS_CARD_HEIGHT, maxY - minY);
+    const nextZoom = clampZoom(Math.min(1, Math.max(0.42, Math.min((size.width - 96) / contentWidth, (size.height - 128) / contentHeight))));
+    const centerX = minX + contentWidth / 2;
+    const centerY = minY + contentHeight / 2;
+    animateView({ x: -centerX, y: -centerY, zoom: nextZoom }, 540);
+  }, [animateView, positionedPosts, size.height, size.width]);
+
+  const visiblePosts = useMemo(() => {
+    const padding = Math.max(240, Math.min(480, 320 / view.zoom));
+    const centerX = size.width / 2;
+    const centerY = size.height / 2;
+    const minX = (-centerX - view.x - padding) / view.zoom;
+    const minY = (-centerY - view.y - padding) / view.zoom;
+    const maxX = (size.width - centerX - view.x + padding) / view.zoom;
+    const maxY = (size.height - centerY - view.y + padding) / view.zoom;
+    return positionedPosts.filter(({ position }) => position.x + CANVAS_CARD_WIDTH > minX && position.x < maxX && position.y + CANVAS_CARD_HEIGHT > minY && position.y < maxY);
+  }, [positionedPosts, size.height, size.width, view]);
+
+  const cardMode = view.zoom < 0.62 ? "compact" : view.zoom > 1.28 ? "expanded" : "standard";
+  useEffect(() => {
+    if (!positionedPosts.length || visiblePosts.length) return;
+    centerLatest();
+  }, [centerLatest, positionedPosts.length, visiblePosts.length]);
+
+  useEffect(() => {
+    if (mode === "horizontal") return;
+    const latest = [...positionedPosts].sort((a, b) => Date.parse(b.post.createdAt) - Date.parse(a.post.createdAt))[0];
+    if (!latest) return;
+    const startupKey = `${feedStyle}:${latest.post.id}`;
+    if (centeredStartupRef.current === startupKey) return;
+    centeredStartupRef.current = startupKey;
+    const frame = requestAnimationFrame(centerLatest);
+    return () => cancelAnimationFrame(frame);
+  }, [centerLatest, feedStyle, mode, positionedPosts]);
+
+  useEffect(() => {
+    if (mode !== "horizontal" || !positionedPosts.length || !size.width) return;
+    const first = positionedPosts[0];
+    const startupKey = `${first.post.id}:${positionedPosts.length}:${size.width}`;
+    if (horizontalStartupRef.current === startupKey) return;
+    horizontalStartupRef.current = startupKey;
+    const targetX = clampHorizontalX(-first.position.x - size.width / 2 + 28);
+    const targetY = -first.position.y - Math.max(180, size.height * 0.42 + 16);
+    const frame = requestAnimationFrame(() => scheduleView({ x: targetX, y: targetY, zoom: 0.95 }));
+    return () => cancelAnimationFrame(frame);
+  }, [clampHorizontalX, mode, positionedPosts, scheduleView, size.height, size.width]);
+
+  useEffect(() => {
+    if (!recenterSignal) return;
+    centerLatest();
+  }, [centerLatest, recenterSignal]);
+
+  useEffect(() => {
+    if (!overviewSignal) return;
+    centerOverview();
+  }, [centerOverview, overviewSignal]);
+
+  const pointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (mode === "none") return;
+    if ((event.target as HTMLElement).closest("button,input,select,textarea,a,video")) return;
+    event.preventDefault();
+    if (animationRef.current !== null) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    const postElement = (event.target as HTMLElement).closest<HTMLElement>("[data-canvas-post-id]");
+    updateSize();
+    didDragRef.current = false;
+    suppressClickRef.current = false;
+    dragRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, view: viewRef.current, postId: postElement?.dataset.canvasPostId };
+    velocityRef.current = { x: event.clientX, y: event.clientY, time: performance.now(), vx: 0 };
+    panVelocityRef.current = { x: event.clientX, y: event.clientY, time: performance.now(), vx: 0, vy: 0 };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const pointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.id !== event.pointerId) return;
+    const deltaX = event.clientX - drag.x;
+    const deltaY = event.clientY - drag.y;
+    if (Math.hypot(deltaX, deltaY) > 6) didDragRef.current = true;
+    if (mode === "horizontal") {
+      if (Math.abs(deltaY) > Math.abs(deltaX) * 1.1) return;
+      const now = performance.now();
+      const elapsed = Math.max(16, now - velocityRef.current.time);
+      velocityRef.current = { x: event.clientX, y: event.clientY, time: now, vx: (event.clientX - velocityRef.current.x) / elapsed };
+      scheduleView({ ...viewRef.current, x: clampHorizontalX(drag.view.x + deltaX), y: drag.view.y });
+      return;
+    }
+    const now = performance.now();
+    const elapsed = Math.max(16, now - panVelocityRef.current.time);
+    panVelocityRef.current = { x: event.clientX, y: event.clientY, time: now, vx: (event.clientX - panVelocityRef.current.x) / elapsed, vy: (event.clientY - panVelocityRef.current.y) / elapsed };
+    scheduleView({ ...viewRef.current, x: drag.view.x + deltaX, y: drag.view.y + deltaY });
+  };
+
+  const pointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (drag?.id === event.pointerId && drag.postId && !didDragRef.current) {
+      suppressClickRef.current = true;
+      onOpenPost(drag.postId);
+    }
+    if (drag?.id === event.pointerId && mode === "horizontal" && didDragRef.current) {
+      const momentum = velocityRef.current.vx * 260;
+      animateView({ ...viewRef.current, x: clampHorizontalX(viewRef.current.x + momentum), y: drag.view.y }, 360);
+    } else if (drag?.id === event.pointerId && mode === "full" && didDragRef.current) {
+      const momentumX = panVelocityRef.current.vx * 260;
+      const momentumY = panVelocityRef.current.vy * 260;
+      animateView({ ...viewRef.current, x: viewRef.current.x + momentumX, y: viewRef.current.y + momentumY }, 420);
+    }
+    dragRef.current = null;
+  };
+
+  const touchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (mode !== "full") return;
+    if (event.touches.length !== 2) return;
+    event.stopPropagation();
+    event.preventDefault();
+    if (animationRef.current !== null) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    const [a, b] = [event.touches[0], event.touches[1]];
+    const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const midpointX = (a.clientX + b.clientX) / 2 - rect.left;
+    const midpointY = (a.clientY + b.clientY) / 2 - rect.top;
+    const current = viewRef.current;
+    if (!touchRef.current) {
+      touchRef.current = { distance, zoom: current.zoom };
+      return;
+    }
+    const nextZoom = clampZoom((distance / touchRef.current.distance) * touchRef.current.zoom);
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const worldX = (midpointX - centerX - current.x) / current.zoom;
+    const worldY = (midpointY - centerY - current.y) / current.zoom;
+    scheduleView({ zoom: nextZoom, x: midpointX - centerX - worldX * nextZoom, y: midpointY - centerY - worldY * nextZoom });
+  };
+
+  return (
+    <main
+      ref={viewportRef}
+      className={`canvas-viewport relative flex-1 overflow-hidden bg-[#f4f2ee] text-slate-950 dark:bg-[#080907] dark:text-white ${mode !== "none" ? "cursor-grab active:cursor-grabbing" : "cursor-default"} ${className}`}
+      style={{ touchAction: mode === "horizontal" ? "pan-y pinch-zoom" : mode === "full" ? "none" : "auto", overscrollBehavior: mode === "horizontal" ? "auto" : "none" }}
+      onPointerDown={pointerDown}
+      onPointerMove={pointerMove}
+      onPointerUp={pointerUp}
+      onPointerCancel={pointerUp}
+      onTouchMove={touchMove}
+      onTouchStart={(event) => {
+        if (mode === "full") event.stopPropagation();
+      }}
+      onTouchEnd={() => (touchRef.current = null)}
+      onClickCapture={(event) => {
+        if (suppressClickRef.current) {
+          event.stopPropagation();
+          suppressClickRef.current = false;
+          return;
+        }
+        if (didDragRef.current) {
+          event.stopPropagation();
+          didDragRef.current = false;
+        }
+      }}
+    >
+      <div className="canvas-dots absolute inset-0" style={{ backgroundPosition: `${view.x % (24 * view.zoom)}px ${view.y % (24 * view.zoom)}px`, backgroundSize: `${24 * view.zoom}px ${24 * view.zoom}px`, willChange: "background-position" }} />
+      {showControls ? <button
+        onClick={(event) => {
+          event.stopPropagation();
+          if (adminMode) {
+            onOpenDashboard?.();
+            return;
+          }
+          centerLatest();
+        }}
+        className={`${controlsClassName || "left-4 top-[max(16px,calc(env(safe-area-inset-top)+16px))]"} absolute z-20 flex h-11 items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white/88 px-3 text-sm font-bold shadow-glass backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 dark:border-white/10 dark:bg-[#111113]/88 dark:focus-visible:ring-white`}
+        aria-label={adminMode ? "Open creator dashboard" : "Jump to latest posts"}
+      >
+        {adminMode ? <Shield size={17} /> : <LocateFixed size={17} />}
+        <span className="hidden sm:inline">{adminMode ? "Dashboard" : "Latest"}</span>
+      </button> : null}
+      {visibleSourcePosts.length && !visiblePosts.length ? (
+        <div className="absolute left-1/2 top-24 z-20 w-[min(90vw,360px)] -translate-x-1/2 rounded-3xl border border-amber-200 bg-white/92 p-4 text-center text-sm shadow-glass backdrop-blur-xl dark:border-amber-300/20 dark:bg-[#111113]/92">
+          <p className="font-bold">Posts are loaded, but the canvas is off target.</p>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">{visibleSourcePosts.length} posts are available. Use Latest to recenter.</p>
+          <button onClick={centerLatest} className="mt-3 rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">Show posts</button>
+        </div>
+      ) : null}
+      {!visibleSourcePosts.length ? (
+        <div className="absolute left-1/2 top-24 z-20 w-[min(90vw,360px)] -translate-x-1/2 rounded-3xl border border-[#d2d2d7] bg-white/92 p-4 text-center text-sm shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-[#111113]/92">
+          <p className="font-bold">No canvas posts yet.</p>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">Create a post and it will appear near the center of the map.</p>
+        </div>
+      ) : null}
+      <div
+        className="canvas-layer absolute left-0 top-0"
+        style={{ transform: `translate3d(${size.width / 2 + view.x}px, ${size.height / 2 + view.y}px, 0) scale(${view.zoom})` }}
+      >
+        {visiblePosts.map(({ post, position }) => {
+          const author = users.find((user) => user.id === post.authorId) || users[0];
+          if (!author) return null;
+          const emphasized = sortMode === "trending" || sortMode.startsWith("most");
+          return (
+            <div key={post.id} className="absolute will-change-transform" style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}>
+              <PostCard
+                post={post}
+                author={author}
+                emphasized={emphasized}
+                density={cardMode}
+                showIdentityStripe
+                currentUserId={currentUserId}
+                muted={mutes.some((mute) => mute.mutedId === author.id)}
+                liked={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "like")}
+                reposted={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "repost")}
+                bookmarked={reactions.some((reaction) => reaction.postId === post.id && reaction.userId === currentUserId && reaction.type === "bookmark")}
+                onOpen={() => onOpenPost(post.id)}
+                onProfile={() => onOpenProfile(author.id)}
+                onLike={() => onLikePost(post.id)}
+                onComment={() => onOpenPost(post.id)}
+                onRepost={() => onRepostPost(post.id)}
+                onBookmark={() => onBookmarkPost(post.id)}
+                onEdit={() => onEditPost?.(post.id)}
+                onDelete={() => onDeletePost?.(post.id)}
+                onReport={() => onReportPost?.(post.id)}
+                onHashtagClick={onHashtagClick}
+                onPinPost={() => onPinPost?.(post.id)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </main>
+  );
+}

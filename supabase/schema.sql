@@ -1,0 +1,789 @@
+create extension if not exists pgcrypto;
+
+-- Basic neutral avatar used when a profile has not uploaded a real image yet.
+-- Keep this in sync with DEFAULT_AVATAR_URL in src/lib/supabaseData.ts.
+create or replace function public.default_connect_avatar_url()
+returns text
+language sql
+immutable
+as $$
+  select 'data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' viewBox=''0 0 240 240''%3E%3Crect width=''240'' height=''240'' rx=''120'' fill=''%23e5e7eb''/%3E%3Ccircle cx=''120'' cy=''92'' r=''42'' fill=''%239ca3af''/%3E%3Cpath d=''M48 211c10-45 42-70 72-70s62 25 72 70'' fill=''%239ca3af''/%3E%3C/svg%3E';
+$$;
+
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  display_name text not null,
+  username text not null unique,
+  avatar_url text not null default public.default_connect_avatar_url(),
+  banner_url text not null default 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80',
+  bio text not null default 'New to CONNECT.',
+  location text not null default '',
+  website text not null default '',
+  featured_title text not null default '',
+  featured_description text not null default '',
+  featured_link text not null default '',
+  featured_banner_url text not null default '',
+  featured_cover_url text not null default '',
+  created_at timestamptz not null default now(),
+  followers_count integer not null default 0,
+  following_count integer not null default 0,
+  verified boolean not null default false,
+  is_admin boolean not null default false,
+  banned boolean not null default false
+);
+
+alter table public.profiles add column if not exists featured_title text not null default '';
+alter table public.profiles add column if not exists featured_description text not null default '';
+alter table public.profiles add column if not exists featured_link text not null default '';
+alter table public.profiles add column if not exists featured_banner_url text not null default '';
+alter table public.profiles add column if not exists featured_cover_url text not null default '';
+alter table public.profiles add column if not exists is_admin boolean not null default false;
+alter table public.profiles add column if not exists banned boolean not null default false;
+alter table public.profiles add column if not exists post_streak integer not null default 0;
+alter table public.profiles add column if not exists last_post_at timestamptz;
+alter table public.profiles alter column avatar_url set default public.default_connect_avatar_url();
+
+do $$
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'profiles'
+      and column_name = 'verified'
+  ) then
+    alter table public.profiles add column verified boolean not null default true;
+    update public.profiles set verified = true;
+  end if;
+end $$;
+
+alter table public.profiles
+  alter column verified set default false;
+
+update public.profiles
+set verified = true
+where created_at < timestamptz '2026-05-23 12:05:00+00';
+
+create table if not exists public.posts (
+  id uuid primary key default gen_random_uuid(),
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null check (type in ('text', 'photo', 'video')),
+  content text not null default '',
+  caption text not null default '',
+  image_url text,
+  video_url text,
+  thumbnail_url text,
+  x integer not null default 0,
+  y integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  likes_count integer not null default 0,
+  comments_count integer not null default 0,
+  reposts_count integer not null default 0,
+  bookmarks_count integer not null default 0,
+  hashtags text[] not null default '{}',
+  pinned boolean not null default false
+);
+
+create or replace function public.update_profile_post_streak()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  previous_post_at timestamptz;
+begin
+  select last_post_at
+  into previous_post_at
+  from public.profiles
+  where id = new.author_id
+  for update;
+
+  update public.profiles
+  set
+    post_streak = case
+      when previous_post_at is null then 1
+      when previous_post_at < now() - interval '48 hours' then 1
+      when previous_post_at <= now() - interval '16 hours' then post_streak + 1
+      else post_streak
+    end,
+    last_post_at = now()
+  where id = new.author_id;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_post_created_update_streak on public.posts;
+create trigger on_post_created_update_streak
+  after insert on public.posts
+  for each row execute procedure public.update_profile_post_streak();
+
+create table if not exists public.comments (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.posts(id) on delete cascade,
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.post_reactions (
+  post_id uuid not null references public.posts(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null check (type in ('like', 'repost', 'bookmark')),
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id, type)
+);
+
+create table if not exists public.follows (
+  follower_id uuid not null references public.profiles(id) on delete cascade,
+  following_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (follower_id, following_id),
+  check (follower_id <> following_id)
+);
+
+create table if not exists public.verification_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  username text not null,
+  display_name text not null,
+  reason text not null default '',
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default now(),
+  reviewed_at timestamptz
+);
+
+alter table public.verification_requests add column if not exists reason text not null default '';
+
+create unique index if not exists verification_requests_one_pending_per_user
+  on public.verification_requests(user_id)
+  where status = 'pending';
+
+create or replace function public.clean_connect_username(raw_username text)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  cleaned text;
+begin
+  cleaned := regexp_replace(coalesce(raw_username, ''), '^@+', '');
+  cleaned := regexp_replace(cleaned, '[^a-zA-Z0-9_]', '_', 'g');
+  cleaned := regexp_replace(cleaned, '_+', '_', 'g');
+  cleaned := regexp_replace(cleaned, '^_+|_+$', '', 'g');
+  cleaned := regexp_replace(cleaned, '_[0-9a-fA-F]{5,8}$', '');
+  cleaned := left(cleaned, 24);
+  if cleaned = '' then
+    cleaned := 'connectuser';
+  end if;
+  return cleaned;
+end;
+$$;
+
+create or replace function public.available_connect_username(raw_username text, current_user_id uuid default null)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  base_username text;
+  candidate text;
+  suffix integer := 0;
+begin
+  base_username := public.clean_connect_username(raw_username);
+
+  loop
+    candidate := case when suffix = 0 then base_username else base_username || suffix::text end;
+    if not exists (
+      select 1 from public.profiles
+      where username = candidate and (current_user_id is null or id <> current_user_id)
+    ) then
+      return candidate;
+    end if;
+    suffix := suffix + 1;
+    if suffix > 99 then
+      raise exception 'Unable to find an available username';
+    end if;
+  end loop;
+end;
+$$;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  base_username text;
+  requested_username text;
+begin
+  base_username := public.clean_connect_username(split_part(new.email, '@', 1));
+  requested_username := public.available_connect_username(coalesce(nullif(new.raw_user_meta_data->>'username', ''), base_username), new.id);
+
+  insert into public.profiles (id, display_name, username, avatar_url, banner_url, bio, location, website)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'display_name', base_username),
+    requested_username,
+    coalesce(nullif(new.raw_user_meta_data->>'avatar_url', ''), public.default_connect_avatar_url()),
+    coalesce(nullif(new.raw_user_meta_data->>'banner_url', ''), 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80'),
+    coalesce(nullif(new.raw_user_meta_data->>'bio', ''), 'New to CONNECT.'),
+    coalesce(new.raw_user_meta_data->>'location', ''),
+    coalesce(new.raw_user_meta_data->>'website', '')
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
+
+create or replace function public.connect_email_registered(target_email text)
+returns boolean
+language sql
+security definer
+set search_path = auth, public
+as $$
+  select exists (
+    select 1
+    from auth.users
+    where lower(email) = lower(trim(target_email))
+  );
+$$;
+
+revoke execute on function public.connect_email_registered(text) from anon, authenticated;
+grant execute on function public.connect_email_registered(text) to anon, authenticated;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+insert into storage.buckets (id, name, public)
+values ('connect-media', 'connect-media', true)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "connect media is public" on storage.objects;
+create policy "connect media is public" on storage.objects
+  for select using (bucket_id = 'connect-media');
+
+drop policy if exists "users upload own connect media" on storage.objects;
+create policy "users upload own connect media" on storage.objects
+  for insert with check (bucket_id = 'connect-media' and auth.uid()::text = (storage.foldername(name))[1]);
+
+alter table public.profiles enable row level security;
+alter table public.posts enable row level security;
+alter table public.comments enable row level security;
+alter table public.post_reactions enable row level security;
+alter table public.follows enable row level security;
+alter table public.verification_requests enable row level security;
+
+drop policy if exists "profiles are readable" on public.profiles;
+create policy "profiles are readable" on public.profiles for select using (true);
+
+drop policy if exists "users insert own profile" on public.profiles;
+create policy "users insert own profile" on public.profiles for insert with check (auth.uid() = id);
+
+drop policy if exists "users update own profile" on public.profiles;
+create policy "users update own profile" on public.profiles for update using (auth.uid() = id);
+
+drop policy if exists "posts are readable" on public.posts;
+create policy "posts are readable" on public.posts for select using (true);
+
+drop policy if exists "users create own posts" on public.posts;
+create policy "users create own posts" on public.posts for insert with check (auth.uid() = author_id);
+
+drop policy if exists "authors update own posts" on public.posts;
+create policy "authors update own posts" on public.posts for update using (auth.uid() = author_id);
+
+drop policy if exists "comments are readable" on public.comments;
+create policy "comments are readable" on public.comments for select using (true);
+
+drop policy if exists "users create own comments" on public.comments;
+create policy "users create own comments" on public.comments for insert with check (auth.uid() = author_id);
+
+drop policy if exists "reactions are readable" on public.post_reactions;
+create policy "reactions are readable" on public.post_reactions for select using (true);
+
+drop policy if exists "users create own reactions" on public.post_reactions;
+create policy "users create own reactions" on public.post_reactions for insert with check (auth.uid() = user_id);
+
+drop policy if exists "users delete own reactions" on public.post_reactions;
+create policy "users delete own reactions" on public.post_reactions for delete using (auth.uid() = user_id);
+
+drop policy if exists "follows are readable" on public.follows;
+create policy "follows are readable" on public.follows for select using (true);
+
+drop policy if exists "users follow as self" on public.follows;
+create policy "users follow as self" on public.follows for insert with check (auth.uid() = follower_id);
+
+drop policy if exists "users unfollow as self" on public.follows;
+create policy "users unfollow as self" on public.follows for delete using (auth.uid() = follower_id);
+
+drop policy if exists "users read own verification requests" on public.verification_requests;
+create policy "users read own verification requests" on public.verification_requests for select using (auth.uid() = user_id);
+
+drop policy if exists "users request own verification" on public.verification_requests;
+create policy "users request own verification" on public.verification_requests for insert with check (auth.uid() = user_id and status = 'pending');
+
+create or replace function public.adjust_post_counter(target_post_id uuid, counter_name text, amount integer)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_id uuid;
+begin
+  actor_id := auth.uid();
+  if actor_id is null then
+    raise exception 'Authentication required';
+  end if;
+  if amount not in (-1, 1) then
+    raise exception 'Unsupported counter adjustment %', amount;
+  end if;
+
+  if counter_name = 'likes_count' then
+    if amount = 1 and not exists (
+      select 1 from public.post_reactions
+      where post_id = target_post_id and user_id = actor_id and type = 'like'
+    ) then
+      raise exception 'A like reaction is required before incrementing likes_count';
+    end if;
+    update public.posts set likes_count = greatest(0, likes_count + amount) where id = target_post_id;
+  elsif counter_name = 'comments_count' then
+    if amount = -1 then
+      raise exception 'Comments cannot be decremented through this function';
+    end if;
+    if not exists (
+      select 1 from public.comments
+      where post_id = target_post_id and author_id = actor_id
+    ) then
+      raise exception 'A comment is required before incrementing comments_count';
+    end if;
+    update public.posts set comments_count = comments_count + amount where id = target_post_id;
+  elsif counter_name = 'reposts_count' then
+    if amount = 1 and not exists (
+      select 1 from public.post_reactions
+      where post_id = target_post_id and user_id = actor_id and type = 'repost'
+    ) then
+      raise exception 'A repost reaction is required before incrementing reposts_count';
+    end if;
+    update public.posts set reposts_count = greatest(0, reposts_count + amount) where id = target_post_id;
+  elsif counter_name = 'bookmarks_count' then
+    if amount = 1 and not exists (
+      select 1 from public.post_reactions
+      where post_id = target_post_id and user_id = actor_id and type = 'bookmark'
+    ) then
+      raise exception 'A bookmark reaction is required before incrementing bookmarks_count';
+    end if;
+    update public.posts set bookmarks_count = greatest(0, bookmarks_count + amount) where id = target_post_id;
+  else
+    raise exception 'Unsupported counter %', counter_name;
+  end if;
+end;
+$$;
+
+create or replace function public.increment_post_counter(target_post_id uuid, counter_name text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.adjust_post_counter(target_post_id, counter_name, 1);
+end;
+$$;
+
+revoke execute on function public.adjust_post_counter(uuid, text, integer) from anon;
+grant execute on function public.adjust_post_counter(uuid, text, integer) to authenticated;
+revoke execute on function public.increment_post_counter(uuid, text) from anon;
+grant execute on function public.increment_post_counter(uuid, text) to authenticated;
+
+create or replace function public.adjust_follow_counts(target_follower_id uuid, target_following_id uuid, amount integer)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_id uuid;
+begin
+  actor_id := auth.uid();
+  if actor_id is null or actor_id <> target_follower_id then
+    raise exception 'Authentication required';
+  end if;
+  if target_follower_id = target_following_id then
+    raise exception 'Users cannot follow themselves';
+  end if;
+  if amount not in (-1, 1) then
+    raise exception 'Unsupported follow adjustment %', amount;
+  end if;
+  if amount = 1 and not exists (
+    select 1 from public.follows
+    where follower_id = target_follower_id and following_id = target_following_id
+  ) then
+    raise exception 'A follow row is required before incrementing follow counts';
+  end if;
+  update public.profiles
+  set following_count = greatest(0, following_count + amount)
+  where id = target_follower_id;
+  update public.profiles
+  set followers_count = greatest(0, followers_count + amount)
+  where id = target_following_id;
+end;
+$$;
+
+revoke execute on function public.adjust_follow_counts(uuid, uuid, integer) from anon;
+grant execute on function public.adjust_follow_counts(uuid, uuid, integer) to authenticated;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.profiles;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.posts;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.comments;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.post_reactions;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.follows;
+exception when duplicate_object then null;
+end $$;
+
+-- Dopamine update: link posts, richer comments, notifications, safety tools.
+alter table public.posts add column if not exists source_url text;
+alter table public.posts add column if not exists source_platform text;
+alter table public.posts add column if not exists source_title text;
+alter table public.posts add column if not exists source_thumb text;
+alter table public.posts add column if not exists muted boolean not null default false;
+
+alter table public.posts drop constraint if exists posts_type_check;
+alter table public.posts add constraint posts_type_check
+  check (type in ('text', 'photo', 'video', 'link'));
+
+alter table public.comments add column if not exists gif_url text;
+alter table public.comments add column if not exists parent_id uuid references public.comments(id) on delete cascade;
+alter table public.comments add column if not exists likes_count integer not null default 0;
+
+create table if not exists public.comment_reactions (
+  comment_id uuid not null references public.comments(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null default 'like' check (type = 'like'),
+  created_at timestamptz not null default now(),
+  primary key (comment_id, user_id, type)
+);
+
+alter table public.comment_reactions enable row level security;
+drop policy if exists "comment reactions readable" on public.comment_reactions;
+create policy "comment reactions readable" on public.comment_reactions for select using (true);
+drop policy if exists "users react to comments" on public.comment_reactions;
+create policy "users react to comments" on public.comment_reactions for insert with check (auth.uid() = user_id);
+drop policy if exists "users unreact comments" on public.comment_reactions;
+create policy "users unreact comments" on public.comment_reactions for delete using (auth.uid() = user_id);
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  actor_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null check (type in ('like','comment','follow','repost','mention','reply')),
+  post_id uuid references public.posts(id) on delete cascade,
+  comment_id uuid references public.comments(id) on delete cascade,
+  read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists notifications_recipient_idx on public.notifications(recipient_id, created_at desc);
+
+alter table public.notifications enable row level security;
+drop policy if exists "users read own notifications" on public.notifications;
+create policy "users read own notifications" on public.notifications for select using (auth.uid() = recipient_id);
+drop policy if exists "notifications insertable by authenticated" on public.notifications;
+create policy "notifications insertable by authenticated" on public.notifications for insert with check (auth.uid() = actor_id);
+drop policy if exists "users mark own read" on public.notifications;
+create policy "users mark own read" on public.notifications for update using (auth.uid() = recipient_id);
+drop policy if exists "users delete own notifications" on public.notifications;
+create policy "users delete own notifications" on public.notifications for delete using (auth.uid() = recipient_id);
+
+create table if not exists public.user_blocks (
+  blocker_id uuid not null references public.profiles(id) on delete cascade,
+  blocked_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, blocked_id),
+  check (blocker_id <> blocked_id)
+);
+
+alter table public.user_blocks enable row level security;
+drop policy if exists "users manage own blocks" on public.user_blocks;
+create policy "users manage own blocks" on public.user_blocks for all using (auth.uid() = blocker_id);
+
+create table if not exists public.user_mutes (
+  muter_id uuid not null references public.profiles(id) on delete cascade,
+  muted_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (muter_id, muted_id),
+  check (muter_id <> muted_id)
+);
+
+alter table public.user_mutes enable row level security;
+drop policy if exists "users manage own mutes" on public.user_mutes;
+create policy "users manage own mutes" on public.user_mutes for all using (auth.uid() = muter_id);
+
+create table if not exists public.reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid not null references public.profiles(id) on delete cascade,
+  post_id uuid references public.posts(id) on delete cascade,
+  reported_user_id uuid references public.profiles(id) on delete cascade,
+  category text not null check (category in ('spam','harassment','misinformation','explicit','other')),
+  note text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.reports enable row level security;
+drop policy if exists "users create own reports" on public.reports;
+create policy "users create own reports" on public.reports for insert with check (auth.uid() = reporter_id);
+
+drop policy if exists "authors delete own posts" on public.posts;
+create policy "authors delete own posts" on public.posts for delete using (auth.uid() = author_id);
+drop policy if exists "users delete own comments" on public.comments;
+create policy "users delete own comments" on public.comments for delete using (auth.uid() = author_id);
+
+create or replace function public.adjust_comment_likes(target_comment_id uuid, amount integer)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.comments set likes_count = greatest(0, likes_count + amount) where id = target_comment_id;
+end; $$;
+revoke execute on function public.adjust_comment_likes(uuid, integer) from anon;
+grant execute on function public.adjust_comment_likes(uuid, integer) to authenticated;
+
+create or replace function public.decrement_post_comments(target_post_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.posts set comments_count = greatest(0, comments_count - 1) where id = target_post_id;
+end; $$;
+revoke execute on function public.decrement_post_comments(uuid) from anon;
+grant execute on function public.decrement_post_comments(uuid) to authenticated;
+
+do $$ begin
+  alter publication supabase_realtime add table public.comment_reactions;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.notifications;
+exception when duplicate_object then null; end $$;
+
+-- Admin hardening and dashboard RPCs.
+-- Keep sensitive profile flags database-owned; normal profile edits must not be
+-- able to grant admin, verification, or ban state.
+create or replace function public.connect_is_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and is_admin = true
+      and banned = false
+  );
+$$;
+
+revoke execute on function public.connect_is_admin() from anon;
+grant execute on function public.connect_is_admin() to authenticated;
+
+create or replace function public.protect_profile_sensitive_flags()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if auth.uid() is not null and not public.connect_is_admin() then
+      new.is_admin := false;
+      new.verified := false;
+      new.banned := false;
+    end if;
+    return new;
+  end if;
+
+  if auth.uid() is not null and not public.connect_is_admin() then
+    new.is_admin := old.is_admin;
+    new.verified := old.verified;
+    new.banned := old.banned;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_profile_sensitive_flags_trigger on public.profiles;
+create trigger protect_profile_sensitive_flags_trigger
+  before insert or update on public.profiles
+  for each row execute function public.protect_profile_sensitive_flags();
+
+drop policy if exists "admins update profiles" on public.profiles;
+create policy "admins update profiles" on public.profiles
+  for update using (public.connect_is_admin())
+  with check (public.connect_is_admin());
+
+drop policy if exists "admins read verification requests" on public.verification_requests;
+create policy "admins read verification requests" on public.verification_requests
+  for select using (public.connect_is_admin() or auth.uid() = user_id);
+
+drop policy if exists "admins update verification requests" on public.verification_requests;
+create policy "admins update verification requests" on public.verification_requests
+  for update using (public.connect_is_admin())
+  with check (public.connect_is_admin());
+
+create or replace function public.connect_admin_users()
+returns setof public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.connect_is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  return query
+  select *
+  from public.profiles
+  order by created_at desc;
+end;
+$$;
+
+revoke execute on function public.connect_admin_users() from anon;
+grant execute on function public.connect_admin_users() to authenticated;
+
+create or replace function public.connect_admin_verification_requests()
+returns setof public.verification_requests
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.connect_is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  return query
+  select *
+  from public.verification_requests
+  order by created_at desc;
+end;
+$$;
+
+revoke execute on function public.connect_admin_verification_requests() from anon;
+grant execute on function public.connect_admin_verification_requests() to authenticated;
+
+create or replace function public.connect_admin_update_user(
+  target_user_id uuid,
+  next_username text default null,
+  next_display_name text default null,
+  next_verified boolean default null,
+  next_banned boolean default null
+)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_profile public.profiles;
+  clean_username text;
+begin
+  if not public.connect_is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  if target_user_id is null then
+    raise exception 'Target user is required';
+  end if;
+
+  if next_username is not null and trim(next_username) <> '' then
+    clean_username := public.available_connect_username(next_username, target_user_id);
+  end if;
+
+  update public.profiles
+  set
+    username = coalesce(clean_username, username),
+    display_name = coalesce(nullif(trim(next_display_name), ''), display_name),
+    verified = coalesce(next_verified, verified),
+    banned = coalesce(next_banned, banned)
+  where id = target_user_id
+  returning * into updated_profile;
+
+  if updated_profile.id is null then
+    raise exception 'User not found';
+  end if;
+
+  return updated_profile;
+end;
+$$;
+
+revoke execute on function public.connect_admin_update_user(uuid, text, text, boolean, boolean) from anon;
+grant execute on function public.connect_admin_update_user(uuid, text, text, boolean, boolean) to authenticated;
+
+create or replace function public.connect_admin_review_verification(target_request_id uuid, next_status text)
+returns public.verification_requests
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  reviewed public.verification_requests;
+begin
+  if not public.connect_is_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  if next_status not in ('approved', 'rejected') then
+    raise exception 'Unsupported verification status';
+  end if;
+
+  update public.verification_requests
+  set status = next_status, reviewed_at = now()
+  where id = target_request_id
+  returning * into reviewed;
+
+  if reviewed.id is null then
+    raise exception 'Verification request not found';
+  end if;
+
+  if next_status = 'approved' then
+    update public.profiles set verified = true where id = reviewed.user_id;
+  end if;
+
+  return reviewed;
+end;
+$$;
+
+revoke execute on function public.connect_admin_review_verification(uuid, text) from anon;
+grant execute on function public.connect_admin_review_verification(uuid, text) to authenticated;
+
+-- Bootstrap the current CONNECT owner. The unique username prevents future
+-- impostors from acquiring this role by renaming themselves.
+update public.profiles
+set is_admin = true, verified = true
+where lower(username) = 'anti';

@@ -1,0 +1,387 @@
+import { Image, Link2, Loader2, Send, Upload, Video, X } from "lucide-react";
+import { ClipboardEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { OGPreview, PostType, User } from "../types";
+import { fetchOGPreview } from "../lib/supabaseData";
+import { getVideoEmbedUrl, isDirectVideoUrl, normalizeExternalUrl } from "../utils/media";
+
+type Props = {
+  open: boolean;
+  currentUser: User;
+  onClose: () => void;
+  onPublish: (draft: { type: PostType; content: string; caption: string; imageUrl?: string; videoUrl?: string; thumbnailUrl?: string; mediaFile?: File; thumbnailFile?: File; sourceUrl?: string; sourcePlatform?: OGPreview["platform"]; sourceTitle?: string; sourceThumb?: string }) => void | Promise<unknown>;
+};
+
+type SavedDraft = {
+  type: PostType;
+  content: string;
+  caption: string;
+  imageUrl: string;
+  videoUrl: string;
+  thumbnailUrl: string;
+  sourceUrl: string;
+};
+
+const draftKey = "connect_draft";
+
+export function Composer({ open, currentUser, onClose, onPublish }: Props) {
+  const [type, setType] = useState<PostType>("text");
+  const [content, setContent] = useState("");
+  const [caption, setCaption] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
+  const [mediaFile, setMediaFile] = useState<File | undefined>();
+  const [thumbnailFile, setThumbnailFile] = useState<File | undefined>();
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [ogPreview, setOgPreview] = useState<OGPreview | undefined>();
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [mediaPreview, setMediaPreview] = useState("");
+  const [thumbnailPreview, setThumbnailPreview] = useState("");
+  const [previewFit, setPreviewFit] = useState<"contain" | "cover">("contain");
+  const [previewAspect, setPreviewAspect] = useState<"natural" | "square" | "portrait" | "wide">("natural");
+  const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState("");
+  const [savedDraft, setSavedDraft] = useState<SavedDraft | undefined>();
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  const preview = useMemo(() => (type === "text" || type === "link" ? content : caption), [caption, content, type]);
+  const normalizedVideoUrl = type === "video" && videoUrl.trim() ? normalizeExternalUrl(videoUrl) : "";
+  const videoEmbedUrl = getVideoEmbedUrl(normalizedVideoUrl);
+  const hasMedia = type === "photo" ? Boolean(mediaFile || imageUrl.trim()) : type === "video" ? Boolean(mediaFile || videoUrl.trim()) : true;
+  const canPublish = type === "link" ? Boolean(content.trim() && sourceUrl.trim()) : type === "text" ? Boolean(content.trim()) : hasMedia;
+  const hasDraftContent = Boolean(content.trim() || caption.trim() || imageUrl.trim() || videoUrl.trim() || thumbnailUrl.trim() || sourceUrl.trim() || mediaFile || thumbnailFile || ogPreview);
+  const requestClose = useCallback(() => {
+    if (hasDraftContent && !confirmDiscard) {
+      setConfirmDiscard(true);
+      return;
+    }
+    setConfirmDiscard(false);
+    onClose();
+  }, [confirmDiscard, hasDraftContent, onClose]);
+  const discardAndClose = () => {
+    localStorage.removeItem(draftKey);
+    setConfirmDiscard(false);
+    setSavedDraft(undefined);
+    onClose();
+  };
+  const resumeDraft = () => {
+    if (!savedDraft) return;
+    setType(savedDraft.type);
+    setContent(savedDraft.content);
+    setCaption(savedDraft.caption);
+    setImageUrl(savedDraft.imageUrl);
+    setVideoUrl(savedDraft.videoUrl);
+    setThumbnailUrl(savedDraft.thumbnailUrl);
+    setSourceUrl(savedDraft.sourceUrl);
+    setSavedDraft(undefined);
+    setConfirmDiscard(false);
+  };
+  const discardSavedDraft = () => {
+    localStorage.removeItem(draftKey);
+    setSavedDraft(undefined);
+  };
+
+  useEffect(() => {
+    if (!mediaFile) {
+      setMediaPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(mediaFile);
+    setMediaPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [mediaFile]);
+
+  useEffect(() => {
+    if (!thumbnailFile) {
+      setThumbnailPreview("");
+      return;
+    }
+    const url = URL.createObjectURL(thumbnailFile);
+    setThumbnailPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [thumbnailFile]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestClose();
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [open, requestClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(draftKey) || "null") as SavedDraft | null;
+      if (parsed && (parsed.content || parsed.caption || parsed.imageUrl || parsed.videoUrl || parsed.thumbnailUrl || parsed.sourceUrl)) {
+        setSavedDraft(parsed);
+      }
+    } catch {
+      setSavedDraft(undefined);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const interval = window.setInterval(() => {
+      const draft: SavedDraft = { type, content, caption, imageUrl, videoUrl, thumbnailUrl, sourceUrl };
+      if (draft.content || draft.caption || draft.imageUrl || draft.videoUrl || draft.thumbnailUrl || draft.sourceUrl) {
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+      }
+    }, 2000);
+    return () => window.clearInterval(interval);
+  }, [caption, content, imageUrl, open, sourceUrl, thumbnailUrl, type, videoUrl]);
+
+  if (!open) return null;
+
+  const handlePaste = (event: ClipboardEvent<HTMLFormElement>) => {
+    const file = event.clipboardData?.files?.[0];
+    if (file?.type.startsWith("image/")) {
+      setType("photo");
+      setMediaFile(file);
+    }
+  };
+  const aspectClass = previewAspect === "square" ? "aspect-square" : previewAspect === "portrait" ? "aspect-[4/5]" : previewAspect === "wide" ? "aspect-video" : "";
+  const fitClass = previewFit === "cover" ? "object-cover" : "object-contain";
+  const clearMedia = () => {
+    setImageUrl("");
+    setVideoUrl("");
+    setThumbnailUrl("");
+    setMediaFile(undefined);
+    setThumbnailFile(undefined);
+    setMediaPreview("");
+    setThumbnailPreview("");
+    setError("");
+  };
+  const clearImport = () => {
+    setSourceUrl("");
+    setOgPreview(undefined);
+    setError("");
+  };
+  const switchToTextOnly = () => {
+    clearMedia();
+    clearImport();
+    setType("text");
+  };
+
+  const publish = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!canPublish || publishing) return;
+    try {
+      setPublishing(true);
+      setError("");
+      await onPublish({
+        type,
+        content,
+        caption,
+        imageUrl: type === "photo" ? imageUrl.trim() : undefined,
+        videoUrl: type === "video" && videoUrl.trim() ? normalizeExternalUrl(videoUrl) : type === "link" && ogPreview?.platform === "youtube" ? normalizeExternalUrl(sourceUrl) : undefined,
+        thumbnailUrl: type === "video" ? thumbnailUrl.trim() : undefined,
+        mediaFile,
+        thumbnailFile,
+        sourceUrl: type === "link" ? normalizeExternalUrl(sourceUrl) : undefined,
+        sourcePlatform: ogPreview?.platform || (type === "link" ? "generic" : undefined),
+        sourceTitle: ogPreview?.title || sourceUrl,
+        sourceThumb: ogPreview?.image
+      });
+      setContent("");
+      setCaption("");
+      setImageUrl("");
+      setVideoUrl("");
+      setThumbnailUrl("");
+      setSourceUrl("");
+      setOgPreview(undefined);
+      setMediaFile(undefined);
+      setThumbnailFile(undefined);
+      localStorage.removeItem(draftKey);
+      onClose();
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : "Could not publish this post. Please try again.");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  return (
+    <div onPointerDown={(event) => { if (event.target === event.currentTarget) requestClose(); }} className="fixed inset-0 z-50 grid place-items-end bg-slate-950/35 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <form onPointerDown={(event) => event.stopPropagation()} onPaste={handlePaste} onSubmit={publish} className="modal-scroll-pane max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))] shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
+        <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img className="h-11 w-11 rounded-full object-cover" src={currentUser.avatarUrl} alt="" />
+            <div>
+              <p className="font-semibold text-slate-950 dark:text-white">Create post</p>
+              <p className="text-sm text-slate-500">@{currentUser.username}</p>
+            </div>
+          </div>
+          <button type="button" onClick={requestClose} className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:hover:bg-white/10">
+            Close
+          </button>
+        </div>
+
+        {savedDraft ? (
+          <div className="mb-4 rounded-2xl border border-teal-200 bg-amber-50 p-3 text-sm dark:border-amber-300/20 dark:bg-amber-400/10">
+            <p className="font-bold text-amber-900 dark:text-amber-100">You have an unsaved draft.</p>
+            <div className="mt-2 flex gap-2">
+              <button type="button" onClick={resumeDraft} className="rounded-full bg-[#8B7355] px-3 py-1.5 text-xs font-bold text-white">Resume</button>
+              <button type="button" onClick={discardSavedDraft} className="rounded-full border border-amber-300 px-3 py-1.5 text-xs font-bold text-amber-800 dark:border-amber-300/30 dark:text-amber-100">Discard</button>
+            </div>
+          </div>
+        ) : null}
+
+        {confirmDiscard ? (
+          <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-300/20 dark:bg-amber-400/10">
+            <p className="font-bold text-amber-900 dark:text-amber-100">Discard this draft?</p>
+            <div className="mt-2 flex gap-2">
+              <button type="button" onClick={() => setConfirmDiscard(false)} className="rounded-full bg-slate-950 px-3 py-1.5 text-xs font-bold text-white dark:bg-white dark:text-slate-950">Keep editing</button>
+              <button type="button" onClick={discardAndClose} className="rounded-full border border-amber-300 px-3 py-1.5 text-xs font-bold text-amber-800 dark:border-amber-300/30 dark:text-amber-100">Discard</button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mb-4 grid grid-cols-4 gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-white/10">
+          {(["text", "photo", "video", "link"] as PostType[]).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setType(option)}
+              className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold capitalize ${
+                type === option ? "bg-white shadow-sm dark:bg-slate-900" : "text-slate-500"
+              }`}
+            >
+              {option === "photo" ? <Image size={16} /> : option === "video" ? <Video size={16} /> : option === "link" ? <Link2 size={16} /> : null}
+              {option === "link" ? "Import" : option}
+            </button>
+          ))}
+        </div>
+
+        {type === "text" ? (
+          <textarea
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            className="min-h-36 w-full resize-none rounded-2xl border border-slate-200 bg-transparent p-4 outline-none focus:border-[#A0845C] dark:border-white/10"
+            placeholder="What should this canvas remember?"
+          />
+        ) : type === "link" ? (
+          <div className="space-y-3">
+            <textarea value={content} onChange={(event) => setContent(event.target.value)} className="min-h-28 w-full resize-none rounded-2xl border border-slate-200 bg-transparent p-4 outline-none focus:border-[#A0845C] dark:border-white/10" placeholder="Your take on this..." />
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-[#A0845C] dark:border-white/10" placeholder="Paste any link — YouTube, GitHub, Spotify..." />
+              <button type="button" disabled={!sourceUrl.trim() || previewLoading} onClick={async () => {
+                try {
+                  setPreviewLoading(true);
+                  setError("");
+                  setOgPreview(await fetchOGPreview(normalizeExternalUrl(sourceUrl)));
+                } catch {
+                  setError("Couldn't load a preview — you can still post the link.");
+                  setOgPreview({ url: normalizeExternalUrl(sourceUrl), title: sourceUrl, description: "", image: "", platform: "generic" });
+                } finally {
+                  setPreviewLoading(false);
+                }
+              }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold dark:border-white/10">{previewLoading ? <Loader2 className="animate-spin" size={16} /> : "Preview"}</button>
+            </div>
+            {ogPreview ? (
+              <div className="relative overflow-hidden rounded-2xl bg-slate-100 dark:bg-white/10">
+                <button type="button" onClick={clearImport} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove imported preview"><X size={17} /></button>
+                {ogPreview.embedUrl ? <iframe className="aspect-video w-full bg-black" src={ogPreview.embedUrl} title="Link preview" allowFullScreen /> : ogPreview.image ? <img className="max-h-64 w-full object-cover" src={ogPreview.image} alt="" /> : null}
+                <div className="p-4"><p className="text-xs font-bold uppercase text-slate-500">{ogPreview.platform}</p><p className="font-bold">{ogPreview.title}</p><p className="line-clamp-2 text-sm text-slate-500">{ogPreview.description}</p></div>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <textarea
+              value={caption}
+              onChange={(event) => setCaption(event.target.value)}
+              className="min-h-28 w-full resize-none rounded-2xl border border-slate-200 bg-transparent p-4 outline-none focus:border-[#A0845C] dark:border-white/10"
+              placeholder="Write a caption..."
+            />
+            <input
+              value={type === "photo" ? imageUrl : videoUrl}
+              onChange={(event) => (type === "photo" ? setImageUrl(event.target.value) : setVideoUrl(event.target.value))}
+              className="w-full rounded-xl border border-slate-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-[#A0845C] dark:border-white/10"
+              placeholder={type === "photo" ? "Paste image URL or choose a photo" : "Paste video URL or choose a video"}
+            />
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-3 text-sm font-semibold text-slate-600 hover:border-[#A0845C] hover:text-[#8B7355] dark:border-white/15 dark:text-slate-300 dark:hover:text-[#C4A265]">
+              <Upload size={17} />
+              {type === "photo" ? "Choose photo from library" : "Choose video from library"}
+              <input
+                className="sr-only"
+                type="file"
+                accept={type === "photo" ? "image/*" : "video/*"}
+                onChange={(event) => { setMediaFile(event.target.files?.[0]); event.target.value = ""; }}
+              />
+            </label>
+            {type === "video" ? (
+              <>
+                <input
+                  value={thumbnailUrl}
+                  onChange={(event) => setThumbnailUrl(event.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-[#A0845C] dark:border-white/10"
+                  placeholder="Thumbnail URL"
+                />
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-3 text-sm font-semibold text-slate-600 hover:border-[#A0845C] hover:text-[#8B7355] dark:border-white/15 dark:text-slate-300 dark:hover:text-[#C4A265]">
+                  <Upload size={17} />
+                  Choose thumbnail from library
+                  <input className="sr-only" type="file" accept="image/*" onChange={(event) => { setThumbnailFile(event.target.files?.[0]); event.target.value = ""; }} />
+                </label>
+              </>
+            ) : null}
+            <div className="grid gap-2 rounded-2xl bg-slate-100 p-2 dark:bg-white/10 sm:grid-cols-2">
+              <label className="text-xs font-bold text-slate-500">
+                Crop
+                <select value={previewFit} onChange={(event) => setPreviewFit(event.target.value as "contain" | "cover")} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none dark:border-white/10 dark:bg-slate-950 dark:text-white">
+                  <option value="contain">Show full image/video</option>
+                  <option value="cover">Fill frame crop</option>
+                </select>
+              </label>
+              <label className="text-xs font-bold text-slate-500">
+                Frame
+                <select value={previewAspect} onChange={(event) => setPreviewAspect(event.target.value as "natural" | "square" | "portrait" | "wide")} className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none dark:border-white/10 dark:bg-slate-950 dark:text-white">
+                  <option value="natural">Natural</option>
+                  <option value="square">Square</option>
+                  <option value="portrait">Portrait</option>
+                  <option value="wide">Horizontal</option>
+                </select>
+              </label>
+            </div>
+            {(mediaFile || imageUrl || videoUrl || thumbnailFile || thumbnailUrl) ? (
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={clearMedia} className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">
+                  <X size={14} /> Remove media
+                </button>
+                <button type="button" onClick={switchToTextOnly} className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">
+                  Text only
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
+          {type === "photo" && (mediaPreview || imageUrl) ? <div className="relative"><button type="button" onClick={clearMedia} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove photo"><X size={17} /></button><img className={`max-h-[420px] w-full bg-slate-100 dark:bg-black ${aspectClass} ${fitClass}`} src={mediaPreview || imageUrl} alt="" /></div> : null}
+          {type === "video" && mediaPreview ? <div className="relative"><button type="button" onClick={clearMedia} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove video"><X size={17} /></button><video className={`max-h-[420px] w-full bg-black ${aspectClass} ${fitClass}`} src={mediaPreview} controls /></div> : null}
+          {type === "video" && !mediaPreview && normalizedVideoUrl && isDirectVideoUrl(normalizedVideoUrl) ? <div className="relative"><button type="button" onClick={clearMedia} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove video"><X size={17} /></button><video className={`max-h-[420px] w-full bg-black ${aspectClass} ${fitClass}`} src={normalizedVideoUrl} poster={thumbnailPreview || thumbnailUrl} controls /></div> : null}
+          {type === "video" && !mediaPreview && normalizedVideoUrl && videoEmbedUrl ? <div className="relative"><button type="button" onClick={clearMedia} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove external video"><X size={17} /></button><iframe className="aspect-video w-full bg-black" src={videoEmbedUrl} title="External video preview" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div> : null}
+          {type === "video" && !mediaPreview && normalizedVideoUrl && !videoEmbedUrl && !isDirectVideoUrl(normalizedVideoUrl) ? (
+            <a className="block bg-slate-950 p-4 text-sm font-semibold text-white underline" href={normalizedVideoUrl} target="_blank" rel="noreferrer">Open external video</a>
+          ) : null}
+          {type === "video" && !mediaPreview && !normalizedVideoUrl && (thumbnailPreview || thumbnailUrl) ? <div className="relative"><button type="button" onClick={() => { setThumbnailFile(undefined); setThumbnailUrl(""); }} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur" aria-label="Remove thumbnail"><X size={17} /></button><img className="max-h-[420px] w-full bg-slate-100 object-contain dark:bg-black" src={thumbnailPreview || thumbnailUrl} alt="" /></div> : null}
+          <div className="p-4">
+            <p className="mb-1 text-xs font-semibold uppercase text-slate-400">Draft preview</p>
+            <p className="min-h-8 text-sm text-slate-700 dark:text-slate-200">{preview || (type === "text" ? "Your post preview will appear here." : "Media posts can publish with or without a caption.")}</p>
+          </div>
+        </div>
+
+        {error ? <p className="mt-4 rounded-2xl bg-rose-50 p-3 text-sm font-medium text-rose-700 dark:bg-rose-400/10 dark:text-rose-200">{error}</p> : null}
+        <button type="submit" className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 font-semibold text-white disabled:pointer-events-none disabled:opacity-50 dark:bg-white dark:text-slate-950" disabled={!canPublish || publishing}>
+          <Send size={18} />
+          {publishing ? "Publishing..." : "Publish to canvas"}
+        </button>
+      </form>
+    </div>
+  );
+}
