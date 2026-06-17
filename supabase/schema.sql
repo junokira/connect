@@ -16,7 +16,7 @@ create table if not exists public.profiles (
   username text not null unique,
   avatar_url text not null default public.default_connect_avatar_url(),
   banner_url text not null default 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80',
-  bio text not null default 'New to CONNECT.',
+  bio text not null default 'New to VZN.',
   location text not null default '',
   website text not null default '',
   featured_title text not null default '',
@@ -42,6 +42,7 @@ alter table public.profiles add column if not exists banned boolean not null def
 alter table public.profiles add column if not exists post_streak integer not null default 0;
 alter table public.profiles add column if not exists last_post_at timestamptz;
 alter table public.profiles alter column avatar_url set default public.default_connect_avatar_url();
+alter table public.profiles alter column bio set default 'New to VZN.';
 
 do $$
 begin
@@ -231,7 +232,7 @@ begin
     requested_username,
     coalesce(nullif(new.raw_user_meta_data->>'avatar_url', ''), public.default_connect_avatar_url()),
     coalesce(nullif(new.raw_user_meta_data->>'banner_url', ''), 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=80'),
-    coalesce(nullif(new.raw_user_meta_data->>'bio', ''), 'New to CONNECT.'),
+    coalesce(nullif(new.raw_user_meta_data->>'bio', ''), 'New to VZN.'),
     coalesce(new.raw_user_meta_data->>'location', ''),
     coalesce(new.raw_user_meta_data->>'website', '')
   )
@@ -697,10 +698,17 @@ $$;
 revoke execute on function public.connect_admin_verification_requests() from anon;
 grant execute on function public.connect_admin_verification_requests() to authenticated;
 
+drop function if exists public.connect_admin_update_user(uuid, text, text, boolean, boolean);
+
 create or replace function public.connect_admin_update_user(
   target_user_id uuid,
   next_username text default null,
   next_display_name text default null,
+  next_bio text default null,
+  next_location text default null,
+  next_website text default null,
+  next_avatar_url text default null,
+  next_banner_url text default null,
   next_verified boolean default null,
   next_banned boolean default null
 )
@@ -729,6 +737,11 @@ begin
   set
     username = coalesce(clean_username, username),
     display_name = coalesce(nullif(trim(next_display_name), ''), display_name),
+    bio = coalesce(next_bio, bio),
+    location = coalesce(next_location, location),
+    website = coalesce(next_website, website),
+    avatar_url = coalesce(nullif(trim(next_avatar_url), ''), avatar_url),
+    banner_url = coalesce(nullif(trim(next_banner_url), ''), banner_url),
     verified = coalesce(next_verified, verified),
     banned = coalesce(next_banned, banned)
   where id = target_user_id
@@ -742,8 +755,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.connect_admin_update_user(uuid, text, text, boolean, boolean) from anon;
-grant execute on function public.connect_admin_update_user(uuid, text, text, boolean, boolean) to authenticated;
+revoke execute on function public.connect_admin_update_user(uuid, text, text, text, text, text, text, text, boolean, boolean) from anon;
+grant execute on function public.connect_admin_update_user(uuid, text, text, text, text, text, text, text, boolean, boolean) to authenticated;
 
 create or replace function public.connect_admin_review_verification(target_request_id uuid, next_status text)
 returns public.verification_requests
@@ -782,8 +795,13 @@ $$;
 revoke execute on function public.connect_admin_review_verification(uuid, text) from anon;
 grant execute on function public.connect_admin_review_verification(uuid, text) to authenticated;
 
--- Bootstrap the current CONNECT owner. The unique username prevents future
+-- Bootstrap the current VZN owner. The unique username prevents future
 -- impostors from acquiring this role by renaming themselves.
 update public.profiles
 set is_admin = true, verified = true
 where lower(username) = 'anti';
+
+-- Verify the official AWAKEN CULT account when present.
+update public.profiles
+set verified = true
+where lower(username) = 'awaken';

@@ -17,7 +17,7 @@ export const supabase = (() => {
       }
     });
   } catch (error) {
-    console.warn("CONNECT Supabase client could not be created:", error);
+    console.warn("VZN Supabase client could not be created:", error);
     return null;
   }
 })();

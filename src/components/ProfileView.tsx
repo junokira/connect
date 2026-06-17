@@ -177,7 +177,7 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
       setEmailStatus("");
       const result = await onUpdateEmail(nextEmail);
       if (result.pendingEmail) {
-        setEmailStatus("Confirmation sent. Open the email from Supabase to finish changing your CONNECT login email.");
+        setEmailStatus("Confirmation sent. Open the email from Supabase to finish changing your VZN login email.");
       } else {
         setEmailStatus("Email updated.");
       }
@@ -301,7 +301,7 @@ function EditProfileDialog({ user, currentEmail, onClose, onSave, onUpdatePasswo
         </div>
         <div className="mt-4 rounded-2xl border border-slate-200 p-4 dark:border-white/10">
           <p className="text-sm font-bold">Verification</p>
-          <p className="mt-1 text-sm text-slate-500">{user.verified ? "This profile is verified." : "Request review for a CONNECT verification badge."}</p>
+          <p className="mt-1 text-sm text-slate-500">{user.verified ? "This profile is verified." : "Request review for a VZN verification badge."}</p>
           {!user.verified ? (
             <>
               <textarea value={verificationReason} onChange={(event) => setVerificationReason(event.target.value)} className="mt-3 min-h-20 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 text-sm outline-none focus:border-teal-500 dark:border-white/10" placeholder="Why should this profile be verified?" />
@@ -366,7 +366,7 @@ function VerificationSheet({ user, isOwnProfile, status, reason, onClose, onRequ
           </div>
           <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10" aria-label="Close verification details"><X size={19} /></button>
         </div>
-        <p className="mt-5 text-sm leading-6 text-slate-600 dark:text-slate-300">Verification on CONNECT means this account has been manually recognized as the authentic presence for a person, artist, company, or project.</p>
+        <p className="mt-5 text-sm leading-6 text-slate-600 dark:text-slate-300">Verification on VZN means this account has been manually recognized as the authentic presence for a person, artist, company, or project.</p>
         {user.verified ? <p className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700 dark:bg-blue-400/10 dark:text-blue-200">Verified account</p> : null}
         {!user.verified && derivedStatus === "pending" ? <p className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">Verification request pending</p> : null}
         {isOwnProfile && !user.verified && derivedStatus !== "pending" ? (
@@ -801,7 +801,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
             <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-glass dark:border-white/10 dark:bg-[#111113]">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-lg font-black">People to discover</h2>
-                <span className="text-xs font-semibold text-slate-500">Suggested from CONNECT</span>
+                <span className="text-xs font-semibold text-slate-500">Suggested from VZN</span>
               </div>
               <div className="grid gap-2">
                 {discoveryUsers.map((candidate) => {

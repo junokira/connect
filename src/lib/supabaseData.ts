@@ -255,7 +255,7 @@ function requireSupabase() {
 }
 
 function authRedirectUrl(mode: "confirmed" | "magic" | "reset" = "confirmed") {
-  const origin = typeof window === "undefined" ? "https://connect-one-kappa.vercel.app" : window.location.origin;
+  const origin = typeof window === "undefined" ? "https://vzn.awakencult.com" : window.location.origin;
   return `${origin}/?auth=${mode}`;
 }
 
@@ -326,9 +326,9 @@ export async function completeAuthRedirect() {
 
   if (!user) return undefined;
   await ensureProfile(user.id, user.email || `${user.id}@connect.local`, {
-    displayName: user.user_metadata?.display_name || user.email?.split("@")[0] || "CONNECT user",
+    displayName: user.user_metadata?.display_name || user.email?.split("@")[0] || "VZN user",
     username: user.user_metadata?.username || user.email?.split("@")[0] || "connectuser",
-    bio: user.user_metadata?.bio || "New to CONNECT.",
+    bio: user.user_metadata?.bio || "New to VZN.",
     location: user.user_metadata?.location || "",
     website: user.user_metadata?.website || "",
     avatarUrl: user.user_metadata?.avatar_url || DEFAULT_AVATAR_URL,
@@ -408,7 +408,7 @@ export async function updateEmailReal(email: string) {
   const { data, error } = await client.auth.updateUser({ email: nextEmail }, { emailRedirectTo: authRedirectUrl("confirmed") });
   if (error) {
     if (/already registered|already exists|duplicate/i.test(error.message)) {
-      throw new Error("That email is already connected to another CONNECT account.");
+      throw new Error("That email is already connected to another VZN account.");
     }
     throw error;
   }
@@ -464,12 +464,17 @@ export async function loadAdminDashboardReal() {
   };
 }
 
-export async function adminUpdateUserReal(userId: string, patch: { username?: string; displayName?: string; verified?: boolean; banned?: boolean }) {
+export async function adminUpdateUserReal(userId: string, patch: { username?: string; displayName?: string; bio?: string; location?: string; website?: string; avatarUrl?: string; bannerUrl?: string; verified?: boolean; banned?: boolean }) {
   const client = requireSupabase();
   const { data, error } = await client.rpc("connect_admin_update_user", {
     target_user_id: userId,
     next_username: patch.username ?? null,
     next_display_name: patch.displayName ?? null,
+    next_bio: patch.bio ?? null,
+    next_location: patch.location ?? null,
+    next_website: patch.website ?? null,
+    next_avatar_url: patch.avatarUrl ?? null,
+    next_banner_url: patch.bannerUrl ?? null,
     next_verified: patch.verified ?? null,
     next_banned: patch.banned ?? null
   });
@@ -500,7 +505,11 @@ export async function signInWithProvider(provider: "google" | "apple") {
   const client = requireSupabase();
   const { error } = await client.auth.signInWithOAuth({
     provider,
-    options: { redirectTo: authRedirectUrl("confirmed") }
+    options: {
+      redirectTo: authRedirectUrl("confirmed"),
+      scopes: provider === "google" ? "email profile" : "name email",
+      queryParams: provider === "google" ? { prompt: "select_account" } : undefined
+    }
   });
   if (error) throw error;
 }
@@ -531,7 +540,7 @@ export async function ensureProfile(userId: string, email: string, profile?: Sig
       username,
       avatar_url: profile?.avatarUrl || DEFAULT_AVATAR_URL,
       banner_url: profile?.bannerUrl || undefined,
-      bio: profile?.bio || "New to CONNECT.",
+      bio: profile?.bio || "New to VZN.",
       location: profile?.location || "",
       website: profile?.website || "",
       featured_title: "",

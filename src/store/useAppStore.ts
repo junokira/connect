@@ -216,7 +216,7 @@ export const useAppStore = create<AppState>()(
             backendMode: "supabase",
             loading: false,
             authed: false,
-            error: "CONNECT cannot reach the AWAKEN CULT sign-in service yet."
+            error: "VZN cannot reach the AWAKEN CULT sign-in service yet."
           });
           return;
         }
@@ -242,7 +242,7 @@ export const useAppStore = create<AppState>()(
             loading: false
           });
         } catch (error) {
-          set({ error: error instanceof Error ? error.message : "Unable to initialize CONNECT.", loading: false });
+          set({ error: error instanceof Error ? error.message : "Unable to initialize VZN.", loading: false });
         }
       },
       refreshData: async () => {
@@ -256,12 +256,12 @@ export const useAppStore = create<AppState>()(
           const verification = await loadSafeVerification(userId);
           set({ ...data, ...extras, currentUserEmail, verificationStatus: verification.status, verificationReason: verification.reason, notifications, unreadNotificationCount: notifications.filter((notification) => !notification.read).length, error: undefined });
         } catch (error) {
-          console.warn("CONNECT refresh failed:", error);
+          console.warn("VZN refresh failed:", error);
         }
       },
       signIn: async (email, password) => {
         if (!isSupabaseConfigured) {
-          set({ error: "CONNECT cannot reach the AWAKEN CULT sign-in service yet." });
+          set({ error: "VZN cannot reach the AWAKEN CULT sign-in service yet." });
           return;
         }
         try {
@@ -279,7 +279,7 @@ export const useAppStore = create<AppState>()(
       },
       signUp: async (email, password, profile) => {
         if (!isSupabaseConfigured) {
-          set({ error: "CONNECT cannot reach the AWAKEN CULT sign-in service yet." });
+          set({ error: "VZN cannot reach the AWAKEN CULT sign-in service yet." });
           return false;
         }
         try {

@@ -7,11 +7,10 @@ import { VerifiedBadge } from "./VerifiedBadge";
 
 type Props = {
   currentUser?: User;
-  allowCandidate?: boolean;
   onClose: () => void;
 };
 
-export function AdminDashboard({ currentUser, allowCandidate = false, onClose }: Props) {
+export function AdminDashboard({ currentUser, onClose }: Props) {
   const [users, setUsers] = useState<User[]>([]);
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
   const [search, setSearch] = useState("");
@@ -21,8 +20,13 @@ export function AdminDashboard({ currentUser, allowCandidate = false, onClose }:
   const [editing, setEditing] = useState<User | undefined>();
   const [editUsername, setEditUsername] = useState("");
   const [editDisplayName, setEditDisplayName] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editWebsite, setEditWebsite] = useState("");
+  const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const [editBannerUrl, setEditBannerUrl] = useState("");
 
-  const isAdmin = Boolean((currentUser?.isAdmin || allowCandidate) && currentUser?.username.toLowerCase() === "anti" && !currentUser.banned);
+  const isAdmin = Boolean(currentUser?.isAdmin && currentUser?.username.toLowerCase() === "anti" && !currentUser.banned);
 
   const load = useCallback(async () => {
     if (!isAdmin) {
@@ -67,6 +71,11 @@ export function AdminDashboard({ currentUser, allowCandidate = false, onClose }:
     setEditing(user);
     setEditUsername(user.username);
     setEditDisplayName(user.displayName);
+    setEditBio(user.bio);
+    setEditLocation(user.location);
+    setEditWebsite(user.website);
+    setEditAvatarUrl(user.avatarUrl);
+    setEditBannerUrl(user.bannerUrl);
   };
 
   const saveEdit = async (event: FormEvent) => {
@@ -77,7 +86,12 @@ export function AdminDashboard({ currentUser, allowCandidate = false, onClose }:
       setError("");
       const updated = await adminUpdateUserReal(editing.id, {
         username: editUsername,
-        displayName: editDisplayName
+        displayName: editDisplayName,
+        bio: editBio,
+        location: editLocation,
+        website: editWebsite,
+        avatarUrl: editAvatarUrl,
+        bannerUrl: editBannerUrl
       });
       setUsers((current) => current.map((user) => (user.id === updated.id ? updated : user)));
       setEditing(undefined);
@@ -145,7 +159,7 @@ export function AdminDashboard({ currentUser, allowCandidate = false, onClose }:
           <section className="max-w-sm rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-glass dark:border-white/10 dark:bg-[#111113]">
             <Shield className="mx-auto text-rose-500" size={34} />
             <h1 className="mt-3 text-xl font-black">Access denied</h1>
-            <p className="mt-2 text-sm text-slate-500">This dashboard is only available to the verified CONNECT admin account.</p>
+            <p className="mt-2 text-sm text-slate-500">This dashboard is only available to the verified VZN admin account.</p>
           </section>
         </main>
       ) : (
@@ -218,7 +232,7 @@ export function AdminDashboard({ currentUser, allowCandidate = false, onClose }:
 
       {editing ? (
         <div className="fixed inset-0 z-[90] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-          <form onSubmit={saveEdit} className="w-full max-w-md rounded-t-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
+          <form onSubmit={saveEdit} className="thin-scrollbar modal-scroll-pane max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))] shadow-2xl dark:border-white/10 dark:bg-slate-950 sm:rounded-3xl">
             <div className="mb-4 flex items-center justify-between">
               <p className="font-black">Edit @{editing.username}</p>
               <button type="button" onClick={() => setEditing(undefined)} className="grid h-9 w-9 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/10"><X size={18} /></button>
@@ -227,6 +241,16 @@ export function AdminDashboard({ currentUser, allowCandidate = false, onClose }:
             <input value={editDisplayName} onChange={(event) => setEditDisplayName(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none dark:border-white/10" />
             <label className="mt-4 block text-sm font-bold">Username</label>
             <input value={editUsername} onChange={(event) => setEditUsername(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none dark:border-white/10" />
+            <label className="mt-4 block text-sm font-bold">Bio</label>
+            <textarea value={editBio} onChange={(event) => setEditBio(event.target.value)} rows={3} className="mt-2 w-full resize-none rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none dark:border-white/10" />
+            <label className="mt-4 block text-sm font-bold">Location</label>
+            <input value={editLocation} onChange={(event) => setEditLocation(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none dark:border-white/10" />
+            <label className="mt-4 block text-sm font-bold">Website</label>
+            <input value={editWebsite} onChange={(event) => setEditWebsite(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none dark:border-white/10" />
+            <label className="mt-4 block text-sm font-bold">Avatar URL</label>
+            <input value={editAvatarUrl} onChange={(event) => setEditAvatarUrl(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none dark:border-white/10" />
+            <label className="mt-4 block text-sm font-bold">Banner URL</label>
+            <input value={editBannerUrl} onChange={(event) => setEditBannerUrl(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-200 bg-transparent px-4 py-3 outline-none dark:border-white/10" />
             <button className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white dark:bg-white dark:text-slate-950">
               <UserCheck size={16} /> Save changes
             </button>

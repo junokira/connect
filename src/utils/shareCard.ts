@@ -129,7 +129,7 @@ export async function createProfileShareCard(user: User, url: string) {
 
   ctx.fillStyle = "rgba(255,255,255,0.9)";
   ctx.font = "500 34px 'DM Sans', ui-sans-serif, system-ui";
-  const bio = (user.bio || "Explore my CONNECT profile.").replace(/\s+/g, " ").trim();
+  const bio = (user.bio || "Explore my VZN profile.").replace(/\s+/g, " ").trim();
   const words = bio.split(" ");
   const lines: string[] = [];
   let line = "";
@@ -150,7 +150,7 @@ export async function createProfileShareCard(user: User, url: string) {
   ctx.fill();
   ctx.fillStyle = "#ffffff";
   ctx.font = "800 34px 'DM Sans', ui-sans-serif, system-ui";
-  ctx.fillText("connect.awakencult.com", 540, 1406);
+  ctx.fillText("vzn.awakencult.com", 540, 1406);
 
   ctx.fillStyle = "#64748b";
   ctx.font = "600 28px 'DM Sans', ui-sans-serif, system-ui";
@@ -166,13 +166,13 @@ export async function createProfileShareCard(user: User, url: string) {
 
 export async function shareProfileCard(user: User, url: string) {
   const blob = await createProfileShareCard(user, url);
-  const file = new File([blob], `connect-${user.username}.png`, { type: "image/png" });
+  const file = new File([blob], `vzn-${user.username}.png`, { type: "image/png" });
   if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ title: `${user.displayName} on CONNECT`, text: `CONNECT profile: @${user.username}`, url, files: [file] });
+    await navigator.share({ title: `${user.displayName} on VZN`, text: `VZN profile: @${user.username}`, url, files: [file] });
     return;
   }
   if (navigator.share) {
-    await navigator.share({ title: `${user.displayName} on CONNECT`, text: `CONNECT profile: @${user.username}`, url });
+    await navigator.share({ title: `${user.displayName} on VZN`, text: `VZN profile: @${user.username}`, url });
     return;
   }
   await navigator.clipboard.writeText(url);

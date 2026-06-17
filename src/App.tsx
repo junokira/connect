@@ -93,7 +93,7 @@ function AuthGate() {
         avatarUrl: undefined,
         bannerUrl: undefined
       });
-      if (!signedIn) setStatus("Confirmation email sent. Open it on this device or browser, then CONNECT will finish signing you in.");
+      if (!signedIn) setStatus("Confirmation email sent. Open it on this device or browser, then VZN will finish signing you in.");
     })();
   };
 
@@ -121,7 +121,7 @@ function AuthGate() {
     setStatus("");
     try {
       await requestPasswordReset(email);
-      setStatus("Password reset sent. Open the email, then set a new password in CONNECT.");
+      setStatus("Password reset sent. Open the email, then set a new password in VZN.");
     } catch {
       setStatus("");
     }
@@ -130,7 +130,7 @@ function AuthGate() {
   return (
     <main className="h-[100dvh] overflow-y-auto bg-[#f5f5f7] p-4 dark:bg-[#050505]">
       <form onSubmit={submit} className="mx-auto my-4 w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-glass dark:border-white/10 dark:bg-slate-950 sm:my-10">
-        <p className="mb-1 text-2xl font-black text-slate-950 dark:text-white">CONNECT</p>
+        <p className="mb-1 text-2xl font-black text-slate-950 dark:text-white">VZN</p>
         <p className="mb-5 text-sm text-slate-500">Step into AWAKEN CULT's spatial social world.</p>
         <div className="mb-5 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 dark:bg-white/10">
           <button type="button" onClick={() => setMode("signin")} className={`rounded-xl px-3 py-2 text-sm font-bold ${mode === "signin" ? "bg-white shadow-sm dark:bg-slate-900" : "text-slate-500"}`}>Sign in</button>
@@ -196,7 +196,7 @@ function PublicSharedView({ post, author, profile, onSignIn }: { post?: Post; au
       <div className="mx-auto max-w-xl py-8">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <p className="text-xl font-black">CONNECT</p>
+            <p className="text-xl font-black">VZN</p>
             <p className="text-sm text-slate-500">Shared from AWAKEN CULT</p>
           </div>
           <button onClick={onSignIn} className="rounded-full bg-slate-950 px-4 py-2 text-sm font-bold text-white dark:bg-white dark:text-slate-950">Sign in</button>
@@ -243,7 +243,7 @@ function SearchBox({ compact = false, onFocus }: { compact?: boolean; onFocus?: 
         onFocus={onFocus}
         onChange={(event) => setSearch(event.target.value)}
         className={`h-11 w-full rounded-2xl border border-slate-200 bg-white/90 pl-10 ${search ? "pr-9" : "pr-4"} text-sm outline-none focus:border-slate-950 dark:border-white/10 dark:bg-slate-950/90 dark:focus:border-white ${compact ? "lg:w-80" : ""}`}
-        placeholder="Search CONNECT"
+        placeholder="Search VZN"
       />
       {search ? (
         <button
@@ -466,7 +466,7 @@ function ExploreView({
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
           <h1 className="text-3xl font-black">Explore</h1>
-          <p className="text-sm text-slate-500">Trending posts, media, and people across CONNECT.</p>
+          <p className="text-sm text-slate-500">Trending posts, media, and people across VZN.</p>
         </div>
         <section className="mb-8">
           <h2 className="mb-3 text-sm font-bold uppercase text-slate-400">Trending now</h2>
@@ -724,14 +724,14 @@ export default function App() {
       element.setAttribute("content", value);
     };
     const title = activePost && activeAuthor
-      ? `Post by ${activeAuthor.displayName} on CONNECT`
+      ? `Post by ${activeAuthor.displayName} on VZN`
       : activeProfile
-        ? `${activeProfile.displayName} (@${activeProfile.username}) on CONNECT`
-        : "CONNECT by AWAKEN CULT";
+        ? `${activeProfile.displayName} (@${activeProfile.username}) on VZN`
+        : "VZN by AWAKEN CULT";
     const description = activePost
-      ? (activePost.content || activePost.caption || "A CONNECT post").slice(0, 160)
+      ? (activePost.content || activePost.caption || "A VZN post").slice(0, 160)
       : activeProfile
-        ? (activeProfile.bio || `Explore @${activeProfile.username}'s CONNECT profile.`).slice(0, 160)
+        ? (activeProfile.bio || `Explore @${activeProfile.username}'s VZN profile.`).slice(0, 160)
         : "Explore AWAKEN CULT's spatial social world.";
     const image = activePost?.imageUrl || activePost?.thumbnailUrl || activePost?.sourceThumb || activeProfile?.bannerUrl || activeProfile?.avatarUrl || "";
     const url = activePost
@@ -805,8 +805,8 @@ export default function App() {
   }, [setActiveProfile]);
   const shareProfile = useCallback(async (profile: User) => {
     const url = new URL(`/u/${encodeURIComponent(profile.username)}`, window.location.origin).toString();
-    const title = `${profile.displayName} (@${profile.username}) on CONNECT`;
-    const text = profile.verified ? `Verified CONNECT profile: @${profile.username}\n${url}` : `CONNECT profile: @${profile.username}\n${url}`;
+    const title = `${profile.displayName} (@${profile.username}) on VZN`;
+    const text = profile.verified ? `Verified VZN profile: @${profile.username}\n${url}` : `VZN profile: @${profile.username}\n${url}`;
     try {
       navigator.vibrate?.(8);
       if (navigator.share) {
@@ -841,7 +841,7 @@ export default function App() {
     if (target.closest("input,textarea,select,[contenteditable='true']")) return;
     event.preventDefault();
     navigator.vibrate?.(8);
-    setGestureHint("Use CONNECT share");
+    setGestureHint("Use VZN share");
     window.setTimeout(() => setGestureHint(""), 1200);
   }, []);
   const handlePullStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
@@ -891,7 +891,7 @@ export default function App() {
   if (loading && !authed) {
     return (
       <main className="grid min-h-[100dvh] place-items-center bg-[#f7f7f4] p-4 text-slate-950 dark:bg-[#0e1116] dark:text-white">
-        <p className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold shadow-glass dark:border-white/10 dark:bg-slate-950">Loading CONNECT...</p>
+        <p className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold shadow-glass dark:border-white/10 dark:bg-slate-950">Loading VZN...</p>
       </main>
     );
   }
@@ -950,7 +950,7 @@ export default function App() {
             {!chromeHidden ? <button onClick={() => setAdjustOpen(true)} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label="Adjust canvas">
               <SlidersHorizontal size={18} />
             </button> : null}
-            {!chromeHidden ? <button onClick={() => { unlockAudio(); if (!soundEnabled) playNotification(); toggleSound(); }} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label={soundEnabled ? "Disable CONNECT sounds" : "Enable CONNECT sounds"}>
+            {!chromeHidden ? <button onClick={() => { unlockAudio(); if (!soundEnabled) playNotification(); toggleSound(); }} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white/88 shadow-glass backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88" aria-label={soundEnabled ? "Disable VZN sounds" : "Enable VZN sounds"}>
               {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
             </button> : null}
             {chromeHidden ? (
@@ -985,9 +985,9 @@ export default function App() {
             onPinPost={(id) => void pinPost(id)}
             recenterSignal={canvasRecenterSignal}
             overviewSignal={canvasOverviewSignal}
-            adminMode={isAdmin || isAntiAccount}
+            adminMode={isAdmin}
             onOpenDashboard={() => {
-              if (!isAdmin && !isAntiAccount) return;
+              if (!isAdmin) return;
               setDashboardOpen(true);
               window.history.pushState({}, "", "/dashboard");
             }}
@@ -1092,7 +1092,6 @@ export default function App() {
       {dashboardOpen ? (
         <AdminDashboard
           currentUser={currentUser}
-          allowCandidate={isAntiAccount}
           onClose={() => {
             setDashboardOpen(false);
             window.history.pushState({}, "", "/");

@@ -108,7 +108,7 @@ export function PostCard({ post, author, emphasized, liked, reposted, bookmarked
   };
   const sharePost = async () => {
     const url = new URL(`/post/${encodeURIComponent(post.id)}`, window.location.origin).toString();
-    const title = `CONNECT post by ${author.displayName}`;
+    const title = `VZN post by ${author.displayName}`;
     try {
       navigator.vibrate?.(8);
       if (navigator.share) {

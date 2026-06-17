@@ -101,7 +101,7 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
     try {
       navigator.vibrate?.(8);
       if (navigator.share) {
-        await navigator.share({ title: `CONNECT post by ${author.displayName}`, text, url: postUrl });
+        await navigator.share({ title: `VZN post by ${author.displayName}`, text, url: postUrl });
         return;
       }
       await navigator.clipboard.writeText(postUrl);
@@ -158,7 +158,7 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
           </button>
           <div className="min-w-0 flex-1">
             <button type="button" disabled={!user} onClick={() => user && openProfile(user.id)} className="flex max-w-full items-center gap-1 text-left text-sm font-bold">
-              <span className="truncate">{user?.displayName || "CONNECT user"}</span>
+              <span className="truncate">{user?.displayName || "VZN user"}</span>
               <VerifiedBadge verified={user?.verified} size={13} />
               <span className="truncate font-medium text-slate-500">@{user?.username || "unknown"}</span>
             </button>

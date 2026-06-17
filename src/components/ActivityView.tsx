@@ -48,7 +48,7 @@ export function ActivityView({ notifications, users, posts, onMarkAllRead, onOpe
                 <img className="h-12 w-12 shrink-0 rounded-full bg-slate-200 object-cover dark:bg-white/10" src={actor?.avatarUrl || ""} alt="" onError={(event) => { (event.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1 text-sm font-bold">
-                    <span className="truncate">{actor?.displayName || "CONNECT user"}</span>
+                    <span className="truncate">{actor?.displayName || "VZN user"}</span>
                     <VerifiedBadge verified={actor?.verified} size={14} />
                   </span>
                   <span className="mt-1 block text-sm text-slate-700 dark:text-slate-200">{textFor(notification, actor)}</span>
