@@ -1,5 +1,5 @@
 import { Bookmark, Heart, Link, MessageCircle, Repeat2, Share2, Sticker, Trash2, X } from "lucide-react";
-import { FormEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, PointerEvent, TouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Comment, CommentReaction, Post, User } from "../types";
 import { getPlatformLabel, getVideoEmbedUrl, isDirectVideoUrl, normalizeExternalUrl } from "../utils/media";
 import { formatCount, formatDate } from "../utils/posts";
@@ -43,7 +43,10 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
   const [gifResults, setGifResults] = useState<string[]>([]);
   const [pendingGif, setPendingGif] = useState("");
   const [gifError, setGifError] = useState("");
+  const [doubleTapHeart, setDoubleTapHeart] = useState(false);
   const touchStartRef = useRef<{ x: number; y: number; canClose: boolean } | null>(null);
+  const lastPostTapRef = useRef(0);
+  const heartTimerRef = useRef<number | undefined>(undefined);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => setEditing(Boolean(editMode)), [editMode]);
@@ -58,6 +61,7 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
+  useEffect(() => () => window.clearTimeout(heartTimerRef.current), []);
 
   const threads = useMemo(() => {
     const top = comments.filter((item) => !item.parentId).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
@@ -104,6 +108,25 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
     } catch {
       await navigator.clipboard?.writeText(postUrl).catch(() => undefined);
     }
+  };
+  const triggerDoubleTapLike = () => {
+    if (!liked) onLike();
+    navigator.vibrate?.([8, 20, 8]);
+    setDoubleTapHeart(false);
+    window.requestAnimationFrame(() => setDoubleTapHeart(true));
+    window.clearTimeout(heartTimerRef.current);
+    heartTimerRef.current = window.setTimeout(() => setDoubleTapHeart(false), 780);
+  };
+  const handlePostPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("button,a,input,textarea,select,video,iframe,[data-post-comments]")) return;
+    const now = performance.now();
+    if (now - lastPostTapRef.current <= 320) {
+      lastPostTapRef.current = 0;
+      triggerDoubleTapLike();
+      return;
+    }
+    lastPostTapRef.current = now;
   };
   const openProfile = (id: string) => {
     onOpenProfile(id);
@@ -160,8 +183,13 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
   };
 
   return (
-    <div onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className="fixed inset-0 z-[65] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
-      <section onPointerDown={(event) => event.stopPropagation()} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter modal-scroll-pane thin-scrollbar flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-950 sm:rounded-3xl" style={{ maxHeight: "min(94dvh, 100%)" }}>
+    <div role="dialog" aria-modal="true" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className="fixed inset-0 z-[65] grid place-items-end bg-slate-950/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4">
+      <section onPointerDown={(event) => event.stopPropagation()} onTouchStart={touchStart} onTouchEnd={touchEnd} className="modal-enter modal-scroll-pane thin-scrollbar relative flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-950 sm:rounded-3xl" style={{ maxHeight: "min(94dvh, 100%)" }}>
+        {doubleTapHeart ? (
+          <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
+            <Heart className="double-tap-heart text-white drop-shadow-[0_12px_32px_rgba(244,63,94,0.55)]" size={104} fill="currentColor" strokeWidth={1.6} />
+          </div>
+        ) : null}
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur dark:border-white/10 dark:bg-slate-950/90">
           <button type="button" onClick={() => openProfile(author.id)} className="flex min-w-0 items-center gap-3 rounded-2xl text-left">
             <img className="h-11 w-11 rounded-full bg-slate-200 object-cover dark:bg-white/10" src={author.avatarUrl} alt="" onError={(event) => { (event.target as HTMLImageElement).style.visibility = "hidden"; }} />
@@ -183,7 +211,7 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
           </div>
         </header>
 
-        <div ref={scrollerRef} className="thin-scrollbar modal-scroll-pane overflow-y-auto">
+        <div ref={scrollerRef} onPointerUp={handlePostPointerUp} className="thin-scrollbar modal-scroll-pane overflow-y-auto">
           {post.type === "photo" && post.imageUrl ? <img className="max-h-[62vh] w-full object-contain bg-slate-100 dark:bg-black" src={post.imageUrl} alt="" /> : null}
           {post.type === "video" && videoUrl && isDirectVideoUrl(videoUrl) ? <video className="max-h-[62vh] w-full bg-black object-contain" src={videoUrl} poster={post.thumbnailUrl} controls /> : null}
           {post.type === "video" && videoUrl && embedUrl ? <iframe className="aspect-video max-h-[62vh] w-full bg-black" src={embedUrl} title="Video post" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /> : null}
@@ -215,7 +243,7 @@ export function PostModal({ post, author, currentUserId, comments, commentReacti
                 <button type="button" onClick={() => void share()} className="rounded-xl border border-slate-200 p-3 dark:border-white/10"><Share2 className="mx-auto mb-1" size={18} /> <span className="text-xs">Share</span></button>
               </div>
             </div>
-            <aside className="flex min-h-[320px] flex-col rounded-3xl border border-slate-200 bg-[#f5f5f7] dark:border-white/10 dark:bg-white/[0.04]">
+            <aside data-post-comments className="flex min-h-[320px] flex-col rounded-3xl border border-slate-200 bg-[#f5f5f7] dark:border-white/10 dark:bg-white/[0.04]">
               <div className="border-b border-slate-200 px-4 py-3 dark:border-white/10"><p className="text-sm font-black">Comments</p><p className="text-xs text-slate-500">{formatCount(post.commentsCount)} replies</p></div>
               <div className="thin-scrollbar modal-scroll-pane min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
                 {threads.map(({ item, replies }) => <div key={item.id}>{renderComment(item)}{replies.map((reply) => renderComment(reply, true))}</div>)}

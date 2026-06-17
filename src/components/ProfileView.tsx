@@ -587,7 +587,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
           <p className="flex items-center gap-1 font-bold">
             <span className="truncate">{user.displayName}</span>
             {(user.verified || isOwnProfile) ? (
-              <button onClick={() => setVerificationOpen(true)} className="rounded-full text-slate-400 hover:text-[#007aff] dark:text-slate-500 dark:hover:text-[#64d2ff]" aria-label="Open verification details">
+              <button onClick={() => setVerificationOpen(true)} className="rounded-full text-[#007aff] hover:text-[#0051d5] dark:text-[#64d2ff] dark:hover:text-[#8bdcff]" aria-label="Open verification details">
                 {user.verified ? <VerifiedBadge verified size={15} /> : <BadgeCheck size={15} strokeWidth={2.4} />}
               </button>
             ) : null}
@@ -633,7 +633,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
               {isOwnProfile ? (
                 <>
                   <button onClick={() => setEditing(true)} className="rounded-full border border-slate-300 px-5 py-2 text-sm font-bold hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10">Edit profile</button>
-                  <button onClick={() => setVerificationOpen(true)} className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" aria-label="Verification settings"><BadgeCheck size={17} /></button>
+                  <button onClick={() => setVerificationOpen(true)} className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 text-[#007aff] hover:bg-slate-100 dark:border-white/15 dark:text-[#64d2ff] dark:hover:bg-white/10" aria-label="Verification settings"><BadgeCheck size={17} /></button>
                   <button onClick={shareProfile} className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 hover:bg-slate-100 dark:border-white/15 dark:hover:bg-white/10" aria-label="Share profile"><Share2 size={17} /></button>
                 </>
               ) : isBlocked ? (
@@ -658,7 +658,7 @@ export function ProfileView({ user, currentUserId, currentUserEmail, verificatio
             <h1 className="flex items-center gap-2 text-2xl font-black">
               {user.displayName}
               {(user.verified || isOwnProfile) ? (
-                <button onClick={() => setVerificationOpen(true)} className="rounded-full text-slate-400 hover:text-[#007aff] dark:text-slate-500 dark:hover:text-[#64d2ff]" aria-label="Open verification details">
+                <button onClick={() => setVerificationOpen(true)} className="rounded-full text-[#007aff] hover:text-[#0051d5] dark:text-[#64d2ff] dark:hover:text-[#8bdcff]" aria-label="Open verification details">
                   {user.verified ? <VerifiedBadge verified size={21} /> : <BadgeCheck size={21} strokeWidth={2.4} />}
                 </button>
               ) : null}

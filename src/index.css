@@ -187,6 +187,39 @@ video {
   animation: like-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+@keyframes double-tap-heart {
+  0% {
+    opacity: 0;
+    transform: scale(0.45) rotate(-8deg);
+  }
+  24% {
+    opacity: 1;
+    transform: scale(1.18) rotate(4deg);
+  }
+  48% {
+    opacity: 1;
+    transform: scale(0.96) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5) rotate(0deg);
+  }
+}
+
+.double-tap-heart {
+  animation: double-tap-heart 760ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+button[aria-label="Open verification details"],
+button[aria-label="Verification settings"] {
+  color: #007aff;
+}
+
+.dark button[aria-label="Open verification details"],
+.dark button[aria-label="Verification settings"] {
+  color: #64d2ff;
+}
+
 @keyframes float-up {
   0% { opacity: 0; transform: translateY(8px) scale(0.82); }
   18% { opacity: 1; transform: translateY(0) scale(1); }
